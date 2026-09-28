@@ -15,3 +15,6 @@ require('./cases/01-dang-nhap')();
 require('./cases/02-tai-khoan-va-nav')();
 require('./cases/03-tong-quan')();
 require('./cases/04-nhat-ky-duyet')();
+require('./cases/05-tra-lai-va-khoa-sua')();
+require('./cases/06-ho-so')();
+require('./cases/07-quyen-theo-chuc-danh')();
