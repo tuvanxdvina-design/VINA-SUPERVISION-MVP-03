@@ -27,7 +27,9 @@ function createTestDb(dbUrl) {
 
   function psqlFile(file) {
     if (nativePsql) { execFileSync('psql', [dbUrl, '-v', 'ON_ERROR_STOP=1', '-q', '-f', file], { stdio: 'pipe' }); return; }
-    const remote = '/tmp/vina-test-' + path.basename(file);
+    // Tên riêng theo CSDL + tiến trình: hai bộ kiểm thử chạy song song (giao diện + regression)
+    // dùng chung /tmp của container, dùng tên chung thì bộ này xoá tệp lúc bộ kia đang nạp.
+    const remote = '/tmp/vina-test-' + dbName + '-' + process.pid + '-' + path.basename(file);
     execFileSync('docker', ['cp', file, CONTAINER + ':' + remote], { stdio: 'pipe' });
     try { execFileSync('docker', ['exec', CONTAINER, 'psql', '-U', dbUserFromUrl(dbUrl), '-d', dbName, '-v', 'ON_ERROR_STOP=1', '-q', '-f', remote], { stdio: 'pipe' }); }
     finally { try { execFileSync('docker', ['exec', CONTAINER, 'rm', '-f', remote], { stdio: 'ignore' }); } catch (_) {} }

@@ -100,8 +100,12 @@ async function loginViaApi(page, who, password = 'demo') {
   // app đang ở trạng thái chưa đăng nhập có thể tự đăng xuất/tải lại và phá context đánh giá.
   // Gọi lại hàm này với người khác sẽ ghi đè phiên (script nạp sau thắng) → đổi tài khoản được.
   await page.addInitScript(a => { try { localStorage.setItem('vina_supervision_auth', a); } catch (_) {} }, auth);
+  // Quyền theo công trình được tải bất đồng bộ và quyết định nav "Việc cần duyệt"/"Thùng rác"
+  // ẩn hay hiện. Phải chờ lời gọi đó xong, nếu không ca kiểm thử sẽ đỏ ngẫu nhiên khi máy tải nặng.
+  const quyenDaTai = page.waitForResponse(r => /my-permissions/.test(r.url()), { timeout: 10000 }).catch(() => null);
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('nav button[data-page="projects"]', { state: 'visible' });
+  await quyenDaTai;
   return data.user;
 }
 

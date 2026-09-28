@@ -1,5 +1,5 @@
 const SHELL_CACHE = 'vina-supervision-shell-20261007-v37';
-const SHELL_FILES = ['./', './api.js', './favicon.ico', './js/00-khoi-dong.js'];
+const SHELL_FILES = ['./', './api.js', './favicon.ico', './js/00-khoi-dong.js', './js/01-core.js', './js/02-glue-sau-api.js', './js/03-font-fix.js', './js/04-tinh-nang-2.js', './js/05-glue-cuoi.js', './js/06-tinh-nang-3.js'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(SHELL_CACHE).then(cache => cache.addAll(SHELL_FILES)).then(() => self.skipWaiting()));

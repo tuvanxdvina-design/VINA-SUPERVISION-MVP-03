@@ -38,7 +38,9 @@ for (const f of srcTags) {
 if (jsFiles.length && !/url\.pathname\.startsWith\('\/js\/'\)/.test(swSrc)) { bad++; console.log('LỖI sw.js: bộ lọc fetch chưa cho phép /js/ — tệp js sẽ không được cache'); }
 
 const build = (fs.readFileSync(path.join(root, 'backend/src/build.js'), 'utf8').match(/BUILD:\s*'([^']+)'/) || [])[1];
-const appBuild = (html.match(/const APP_BUILD='([^']+)'/) || [])[1];
-if (build !== appBuild) { bad++; console.log(`LỖI phiên bản lệch: build.js=${build}, index.html=${appBuild}`); }
+// APP_BUILD có thể nằm trong index.html (trước khi tách) hoặc trong một tệp js/ (sau khi tách).
+const nguonGiaoDien = html + jsFiles.map(f => fs.readFileSync(path.join(jsDir, f), 'utf8')).join('\n');
+const appBuild = (nguonGiaoDien.match(/const APP_BUILD='([^']+)'/) || [])[1];
+if (build !== appBuild) { bad++; console.log(`LỖI phiên bản lệch: build.js=${build}, giao diện=${appBuild}`); }
 console.log(`${n} khối script nội tuyến, ${jsFiles.length} tệp js/, ${bad} lỗi, build ${build}`);
 process.exit(bad ? 1 : 0);

@@ -51,7 +51,12 @@ test('health: đúng phiên bản, không còn migration chờ', async () => {
   const h = await (await fetch(BASE + '/health')).json();
   const build = fs.readFileSync(path.join(ROOT, 'backend/src/build.js'), 'utf8').match(/BUILD:\s*'([^']+)'/)[1];
   assert.equal(h.build, build);
-  assert.equal(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').match(/const APP_BUILD='([^']+)'/)[1], build, 'index.html APP_BUILD phải khớp build.js');
+  // APP_BUILD nằm trong index.html (trước khi tách) hoặc trong một tệp js/ (sau khi tách).
+  const jsDir = path.join(ROOT, 'js');
+  const nguonGiaoDien = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')
+    + (fs.existsSync(jsDir) ? fs.readdirSync(jsDir).filter(f => f.endsWith('.js')).map(f => fs.readFileSync(path.join(jsDir, f), 'utf8')).join('\n') : '');
+  const appBuild = (nguonGiaoDien.match(/const APP_BUILD='([^']+)'/) || [])[1];
+  assert.equal(appBuild, build, 'APP_BUILD của giao diện phải khớp build.js');
 });
 
 test('migration: gộp nhân sự trùng NFD/khoảng trắng, liên kết tài khoản, giữ bản cập nhật mới nhất', async () => {
