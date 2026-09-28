@@ -51,7 +51,7 @@ Construction-supervision (TVGS) management app for a Vietnamese consulting firm.
 - **Only Claude Code edits this folder** (OpenAI Codex no longer used). If a file changed unexpectedly, say so instead of silently overwriting.
 - One feature per session; keep this file and `docs/CODEMAP.md` updated when adding files/functions/rules (that is what makes new sessions cheap).
 - Model: Sonnet for routine edits; Opus for permission/workflow design, migrations on real data, security, large refactors.
-- Git: `.gitignore` ready (secrets, backups, uploads, web-public excluded). Git is NOT installed yet (user to run `winget install --id Git.Git -e`); once installed: `git init -b main`, verify no secrets staged, first commit. After that, prefer `git diff` / `git log -p <file>` over re-reading files, and commit after each verified change.
+- Git (local only, no remote): `C:\Program Files\Git\cmd\git.exe` (may not be on PATH in the tool shell — use full path). Repo initialized 2026-09-28, first commit `a1546c1` = build 2026-10-06.1. `core.autocrlf=false`. Start a session with `git log --oneline -n 10` + `git status --short` to see what changed since last time (incl. user's own edits); use `git diff` instead of re-reading files. **Commit after each verified change** (message in Vietnamese: what + why + build id). Before committing, confirm no secret is staged (`.env`, `Token*.txt`, `Pas user.xlsx`, backups, uploads are ignored).
 - Next planned big task (own session, Opus): add automated UI tests for main flows, then split `index.html` into per-feature JS files.
 
 ## Known issues / hazards
