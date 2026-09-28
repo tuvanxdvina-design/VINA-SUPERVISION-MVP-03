@@ -9,6 +9,13 @@ foreach ($fileName in @('index.html', 'api.js', 'favicon.ico', 'sw.js', 'assets\
     New-Item -ItemType Directory -Path (Split-Path (Join-Path $webRoot $fileName)) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $projectRoot $fileName) -Destination (Join-Path $webRoot $fileName) -Force
 }
+# Cac tep JS cua giao dien nam trong js\ — chep ca thu muc de khong phai liet ke tung tep
+$jsSrc = Join-Path $projectRoot 'js'
+if (Test-Path $jsSrc) {
+    $jsDst = Join-Path $webRoot 'js'
+    New-Item -ItemType Directory -Path $jsDst -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $jsSrc '*') -Destination $jsDst -Recurse -Force
+}
 
 function Test-Http([string]$url) {
     try {

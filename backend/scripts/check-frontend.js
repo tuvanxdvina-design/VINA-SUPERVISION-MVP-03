@@ -17,8 +17,28 @@ for (const f of ['api.js', 'sw.js']) {
   try { new vm.Script(fs.readFileSync(path.join(root, f), 'utf8'), { filename: f }); }
   catch (e) { bad++; console.log(`LỖI ${f}: ${e.message}`); }
 }
+// Kiểm cú pháp mọi tệp js/*.js và đối chiếu ba danh sách phải khớp nhau:
+// thẻ <script src> trong index.html, SHELL_FILES và bộ lọc fetch trong sw.js.
+const jsDir = path.join(root, 'js');
+const jsFiles = fs.existsSync(jsDir) ? fs.readdirSync(jsDir).filter(f => f.endsWith('.js')).sort() : [];
+for (const f of jsFiles) {
+  try { new vm.Script(fs.readFileSync(path.join(jsDir, f), 'utf8'), { filename: 'js/' + f }); }
+  catch (e) { bad++; console.log(`LỖI js/${f}: ${e.message}`); }
+}
+const srcTags = [...html.matchAll(/<script\b[^>]*src="\.\/js\/([^"]+)"/g)].map(m => m[1]);
+const swSrc = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+const shell = [...swSrc.matchAll(/'\.\/js\/([^']+)'/g)].map(m => m[1]);
+for (const f of jsFiles) {
+  if (!srcTags.includes(f)) { bad++; console.log(`LỖI js/${f} không có thẻ <script src> trong index.html — tính năng sẽ mất im lặng`); }
+  if (!shell.includes(f)) { bad++; console.log(`LỖI js/${f} không có trong SHELL_FILES của sw.js — app sẽ hỏng khi mất mạng`); }
+}
+for (const f of srcTags) {
+  if (!jsFiles.includes(f)) { bad++; console.log(`LỖI index.html trỏ tới js/${f} nhưng tệp không tồn tại`); }
+}
+if (jsFiles.length && !/url\.pathname\.startsWith\('\/js\/'\)/.test(swSrc)) { bad++; console.log('LỖI sw.js: bộ lọc fetch chưa cho phép /js/ — tệp js sẽ không được cache'); }
+
 const build = (fs.readFileSync(path.join(root, 'backend/src/build.js'), 'utf8').match(/BUILD:\s*'([^']+)'/) || [])[1];
 const appBuild = (html.match(/const APP_BUILD='([^']+)'/) || [])[1];
 if (build !== appBuild) { bad++; console.log(`LỖI phiên bản lệch: build.js=${build}, index.html=${appBuild}`); }
-console.log(`${n} khối script nội tuyến, ${bad} lỗi, build ${build}`);
+console.log(`${n} khối script nội tuyến, ${jsFiles.length} tệp js/, ${bad} lỗi, build ${build}`);
 process.exit(bad ? 1 : 0);

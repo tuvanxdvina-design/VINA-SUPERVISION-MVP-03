@@ -58,7 +58,9 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// Serve only the three public assets. Never expose project backups or .env.
+// Chỉ phục vụ các tệp giao diện công khai (trang, api.js, thư mục js/, sw.js, favicon, logo).
+// Không bao giờ để lộ backup dự án hay .env.
+app.use('/js', express.static(path.join(webRoot, 'js'), { extensions: false, index: false }));
 app.get('/', (req, res) => res.sendFile(path.join(webRoot, 'index.html')));
 app.get('/api.js', (req, res) => res.sendFile(path.join(webRoot, 'api.js')));
 app.get('/favicon.ico', (req, res) => res.sendFile(path.join(webRoot, 'favicon.ico')));
