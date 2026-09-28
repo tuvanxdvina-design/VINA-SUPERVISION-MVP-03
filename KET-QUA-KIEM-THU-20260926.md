@@ -57,6 +57,19 @@ Kết quả phải là `KẾT QUẢ: n/n mục đạt`. Mục nào LỖI có ghi
 | Cú pháp JavaScript `index.html` (6 khối) + `api.js` + toàn bộ `backend/src` | **0 lỗi** |
 | Giao diện (backend riêng cổng 3102, CSDL thử): Kỹ sư không thấy nút Sửa công trình; tệp khai báo `text/html` bị ép tải về; PDF mở trực tiếp; nút Sửa hồ sơ ẩn khi đã gửi duyệt | **Đạt** |
 
+## Đợt 13 — 28/09/2026 (bộ kiểm thử giao diện tự động; KHÔNG đổi mã ứng dụng, không đổi build)
+
+Môi trường: CSDL thử `vina_ui_claude` dựng từ `schema-VINA-PROD-01.sql` + toàn bộ migration + dữ liệu lỗi giống thực tế; backend cổng 3103; Chrome cài trên máy điều khiển bằng `playwright-core` (headless), service worker bị chặn, mỗi ca một browser context riêng. Không đụng CSDL thật.
+
+| Bộ | Kết quả |
+|---|---|
+| Kiểm thử giao diện `backend/tests/ui/` — 14 ca (GD-01…GD-12b + HZ-01, HZ-02) | **15/15 đạt** (15 ca kể cả GD-12b), ~47 giây |
+| Chạy lại lần thứ hai liên tiếp để lọc ca chập chờn | **15/15 đạt**, ~46 giây — không có ca lúc xanh lúc đỏ |
+| Kiểm thử máy chủ `backend/tests/regression.test.js` sau khi tách module dựng CSDL dùng chung (`backend/tests/lib/testDb.js`) | **39/39 đạt** — bằng đúng số đo trước khi tách |
+| Độ nhạy của bộ kiểm thử (cố ý cài lỗi rồi hoàn nguyên) | Bắt được cả 3 lần: đổi mật khẩu sai thành đúng ở ca đăng nhập → GD-01 đỏ; đảo kỳ vọng "người không có quyền Xóa không thấy Thùng rác" → GD-03 đỏ; bỏ `APPROVE` khỏi `LEAD_DEFAULT_PERMS` trong `index.html` → GD-11 đỏ |
+
+Ba hành vi thật của ứng dụng được ca kiểm thử ghi lại (không phải lỗi, nhưng khác với giả định ban đầu): bấm "Duyệt"/"Trả lại" mở cửa sổ "Xem xét và phê duyệt" chứ không hỏi xác nhận nhanh; khung "Quyền truy cập tại công trình" chỉ hiện với nhân sự đã liên kết tài khoản; sau khi khôi phục từ Thùng rác phải tải lại trang mới thấy bản ghi (ứng dụng tự nhắc).
+
 ## Đợt 12 — bản 2026-10-06.1 (quyền Xóa, Thùng rác)
 
 | Bộ | Kết quả |

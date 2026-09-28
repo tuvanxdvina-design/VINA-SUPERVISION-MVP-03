@@ -22,6 +22,7 @@ Construction-supervision (TVGS) management app for a Vietnamese consulting firm.
 
 ## Testing (shell output in this environment is unreliable → always write to a file, then Read/Grep it)
 - Regression: `backend\scripts\run-regression.cmd [dbname]` → results in `backend\tests\last-regression.txt` (Grep `ℹ pass|ℹ fail|✖`). Takes ~2 min; poll the file. Use a unique db name (another tool may use `vina_regression`).
+- Giao diện (14 ca): `backend\scripts\run-ui-tests.cmd [dbname] [mẫu tên ca]` → `backend\tests\last-ui-test.txt` (~50 s; playwright-core + Chrome của máy, cổng 3103, CSDL `vina_ui_claude`; ảnh lỗi ở `backend/tests/ui-artifacts/`). **Sửa `index.html`/`api.js` → chạy bộ này.** Mẫu tên ca là regex, không dùng dấu `|` (dùng `GD-0[67]`). Chi tiết ca + selector: `docs/CODEMAP.md`.
 - Syntax: `node backend\scripts\check-frontend.js` (inline scripts + api.js + sw.js + build id match); `node --check <file>` for backend files.
 - Launch long commands detached (`Start-Process cmd.exe -ArgumentList '/c', ... -WindowStyle Hidden`) and redirect to a file; the PowerShell tool gets killed on long sleeps — poll with Grep / short waits.
 - UI check: start a 2nd backend on port 3102 pointed at the test DB (env PORT/DB_NAME/NODE_ENV=development, seed users log in with password `demo`), open in browser pane, drive via `javascript_exec`. Screenshots time out in this pane — inspect DOM text instead. Never type passwords into forms; fetch `/api/auth/login` from JS with test fixture creds.
@@ -52,7 +53,8 @@ Construction-supervision (TVGS) management app for a Vietnamese consulting firm.
 - One feature per session; keep this file and `docs/CODEMAP.md` updated when adding files/functions/rules (that is what makes new sessions cheap).
 - Model: Sonnet for routine edits; Opus for permission/workflow design, migrations on real data, security, large refactors.
 - Git (local only, no remote): `C:\Program Files\Git\cmd\git.exe` (may not be on PATH in the tool shell — use full path). Repo initialized 2026-09-28, first commit `a1546c1` = build 2026-10-06.1. `core.autocrlf=false`. Start a session with `git log --oneline -n 10` + `git status --short` to see what changed since last time (incl. user's own edits); use `git diff` instead of re-reading files. **Commit after each verified change** (message in Vietnamese: what + why + build id). Before committing, confirm no secret is staged (`.env`, `Token*.txt`, `Pas user.xlsx`, backups, uploads are ignored).
-- Next planned big task (own session, Opus): add automated UI tests for main flows, then split `index.html` into per-feature JS files.
+- Bộ kiểm thử giao diện đã xong (14 ca, `backend/tests/ui/`, xong 28/09/2026) — đây là lưới an toàn cho đợt tách `index.html`.
+- Next planned big task (own session, Opus): tách `index.html` thành các file JS theo tính năng; điều kiện nghiệm thu = 14 ca giao diện vẫn xanh **mà không phải sửa nội dung ca nào**. Sau đó làm nhóm P2 (12 ca còn lại trong `docs/superpowers/specs/2026-09-28-kiem-thu-giao-dien-design.md`).
 
 ## Known issues / hazards
 - `JWT_SECRET` in `backend/.env` is still the placeholder (security banner shown). `Token eyJ….txt` and `Pas user.xlsx` in root contain secrets — do not open, do not publish, never commit.
