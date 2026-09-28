@@ -9,46 +9,18 @@
 // ============================================================================
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync, spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { createTestDb } = require('./lib/testDb');
 
 const DB_URL = process.env.TEST_DB_URL;
-const ROOT = path.resolve(__dirname, '..', '..');
 const PORT = 3101;
 const BASE = `http://127.0.0.1:${PORT}`;
 if (!DB_URL) { console.log('Bỏ qua: chưa đặt TEST_DB_URL'); process.exit(0); }
-const u = new URL(DB_URL);
-const dbName = u.pathname.slice(1);
-const adminUrl = new URL(DB_URL); adminUrl.pathname = '/postgres';
-
-// Dùng psql cài trên Windows nếu có; nếu không thì dùng PostgreSQL trong Docker của dự án.
-function hasNativePsql() {
-  try { execFileSync('psql', ['--version'], { stdio: 'ignore' }); return true; } catch (_) { return false; }
-}
-const nativePsql = hasNativePsql();
-function dbFromUrl(url) { return new URL(url).pathname.slice(1); }
-function dbUserFromUrl(url) { return decodeURIComponent(new URL(url).username); }
-function psql(sql, url = DB_URL) {
-  if (nativePsql) return execFileSync('psql', [url, '-v', 'ON_ERROR_STOP=1', '-qtA', '-c', sql], { encoding: 'utf8' }).trim();
-  return execFileSync('docker', ['exec', 'vina-supervision-db', 'psql', '-U', dbUserFromUrl(url), '-d', dbFromUrl(url), '-v', 'ON_ERROR_STOP=1', '-qtA', '-c', sql], { encoding: 'utf8' }).trim();
-}
-function psqlFile(file) {
-  if (nativePsql) { execFileSync('psql', [DB_URL, '-v', 'ON_ERROR_STOP=1', '-q', '-f', file], { stdio: 'pipe' }); return; }
-  const remote = '/tmp/vina-regression-' + path.basename(file);
-  execFileSync('docker', ['cp', file, 'vina-supervision-db:' + remote], { stdio: 'pipe' });
-  try { execFileSync('docker', ['exec', 'vina-supervision-db', 'psql', '-U', dbUserFromUrl(DB_URL), '-d', dbFromUrl(DB_URL), '-v', 'ON_ERROR_STOP=1', '-q', '-f', remote], { stdio: 'pipe' }); }
-  finally { try { execFileSync('docker', ['exec', 'vina-supervision-db', 'rm', '-f', remote], { stdio: 'ignore' }); } catch (_) {} }
-}
-function resetTestDatabase() {
-  if (nativePsql) {
-    psql('DROP DATABASE IF EXISTS ' + dbName, adminUrl.href);
-    psql('CREATE DATABASE ' + dbName, adminUrl.href);
-    return;
-  }
-  execFileSync('docker', ['exec', 'vina-supervision-db', 'dropdb', '-U', 'postgres', '--if-exists', dbName], { stdio: 'pipe' });
-  execFileSync('docker', ['exec', 'vina-supervision-db', 'createdb', '-U', 'postgres', '-O', dbUserFromUrl(DB_URL), dbName], { stdio: 'pipe' });
-}
+const db = createTestDb(DB_URL);
+const psql = db.psql;
+const psqlFile = db.psqlFile;
+const ROOT = db.ROOT;
 
 let server; const tokens = {}; let P = {};
 async function api(method, p, body, who = 'admin', headers = {}) {
@@ -59,31 +31,9 @@ async function api(method, p, body, who = 'admin', headers = {}) {
 }
 
 test.before(async () => {
-  resetTestDatabase();
-  psql('CREATE EXTENSION IF NOT EXISTS pgcrypto');
-  psqlFile(path.join(ROOT, 'schema-VINA-PROD-01.sql'));
-  const all = fs.readdirSync(path.join(ROOT, 'migrations')).filter(f => /^\d{8}_.+\.sql$/.test(f)).sort();
-  for (const f of all.filter(f => f < '20260926')) psqlFile(path.join(ROOT, 'migrations', f));
-  psql(`CREATE TABLE IF NOT EXISTS project_member_access (project_member_id uuid PRIMARY KEY REFERENCES project_members(id) ON DELETE CASCADE, access_permissions jsonb NOT NULL DEFAULT '["VIEW"]'::jsonb, work_scope text, updated_at timestamptz NOT NULL DEFAULT NOW())`);
-  // Dữ liệu lỗi giống thực tế
-  const nfd = 'Nguyễn Thành B'.normalize('NFD');
-  psql(`
-    INSERT INTO users (username,email,password_hash,full_name,role_id) SELECT 'admin','a@x','demo_hash','Admin',id FROM roles WHERE name='ADMIN';
-    INSERT INTO users (username,email,password_hash,full_name,role_id) SELECT 'thanhb','b@x','demo_hash','Nguyễn Thành B',id FROM roles WHERE name='ENGINEER';
-    INSERT INTO project_members(project_id,user_id,role_id,assigned_by) SELECT p.id,u.id,u.role_id,u.id FROM projects p,users u WHERE p.contract_no='001' AND u.username='admin';
-    INSERT INTO project_members(project_id,user_id,role_id) SELECT p.id,u.id,u.role_id FROM projects p,users u WHERE p.contract_no='001' AND u.username='thanhb';
-    INSERT INTO project_personnel(project_id,full_name,assignment_title,certificate,updated_at) SELECT id,'${nfd}','TVGS trưởng','CC-1',NOW()-interval '1 day' FROM projects WHERE contract_no='001';
-    INSERT INTO project_personnel(project_id,full_name,assignment_title) SELECT id,'Nguyễn  Thành B','GS viên' FROM projects WHERE contract_no='001';
-    INSERT INTO project_personnel(project_id,full_name,assignment_title) SELECT id,'Trần Văn C','GS hiện trường' FROM projects WHERE contract_no='001';
-    INSERT INTO daily_logs(project_id,log_date,shift,work_summary,created_by) SELECT p.id,'2026-09-18','MORNING','seed',u.id FROM projects p,users u WHERE p.contract_no='001' AND u.username='hung';
-    INSERT INTO daily_logs(project_id,log_date,work_summary,created_by) SELECT p.id,'2026-09-21','a',u.id FROM projects p,users u WHERE p.contract_no='001' AND u.username='hung';
-    INSERT INTO daily_logs(project_id,log_date,work_summary,created_by) SELECT p.id,'2026-09-21','b',u.id FROM projects p,users u WHERE p.contract_no='001' AND u.username='son';
-    INSERT INTO documents(project_id,type,auto_code,name,created_by) SELECT p.id,'BB','BB-001-001','seed',u.id FROM projects p,users u WHERE p.contract_no='001' AND u.username='hung';
-  `);
-  // Chạy migration mới (như migrate-db.ps1)
-  for (const f of all.filter(f => f >= '20260926')) psqlFile(path.join(ROOT, 'migrations', f));
-  server = spawn(process.execPath, ['server.js'], { cwd: path.join(ROOT, 'backend'), env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1', NODE_ENV: 'development', DB_HOST: u.hostname, DB_PORT: u.port || '5432', DB_USER: decodeURIComponent(u.username), DB_PASSWORD: decodeURIComponent(u.password), DB_NAME: dbName }, stdio: 'ignore' });
-  for (let i = 0; i < 40; i++) { try { if ((await fetch(BASE + '/health')).ok) break; } catch (_) {} await new Promise(r => setTimeout(r, 250)); }
+  db.setupAll();
+  server = db.startServer({ port: PORT });
+  await db.waitHealth(BASE);
   for (const who of ['admin', 'thanhb', 'hung', 'son', 'tuan', 'duong']) {
     const r = await api('POST', '/auth/login', { username: who, password: 'demo' }, null);
     assert.equal(r.status, 200, 'Khong dang nhap duoc ' + who + ': ' + JSON.stringify(r.body));
