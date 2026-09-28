@@ -85,9 +85,12 @@ async function loginViaApi(page, who, password = 'demo') {
   const res = await page.request.post(BASE + '/api/auth/login', { data: { username: who, password } });
   assert.equal(res.status(), 200, 'Không đăng nhập được bằng API: ' + who);
   const data = await res.json();
-  await page.evaluate(a => localStorage.setItem('vina_supervision_auth', JSON.stringify(a)),
-    { token: data.token, user: data.user, loggedAt: new Date().toISOString() });
-  await page.reload();
+  const auth = JSON.stringify({ token: data.token, user: data.user, loggedAt: new Date().toISOString() });
+  // Nạp phiên TRƯỚC khi script của trang chạy: nếu đặt localStorage sau khi trang đã tải,
+  // app đang ở trạng thái chưa đăng nhập có thể tự đăng xuất/tải lại và phá context đánh giá.
+  // Gọi lại hàm này với người khác sẽ ghi đè phiên (script nạp sau thắng) → đổi tài khoản được.
+  await page.addInitScript(a => { try { localStorage.setItem('vina_supervision_auth', a); } catch (_) {} }, auth);
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('nav button[data-page="projects"]', { state: 'visible' });
   return data.user;
 }

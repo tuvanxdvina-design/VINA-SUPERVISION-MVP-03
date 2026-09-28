@@ -12,3 +12,4 @@ test.before(startApp);
 test.after(stopApp);
 
 require('./cases/01-dang-nhap')();
+require('./cases/02-tai-khoan-va-nav')();
