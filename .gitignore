@@ -1,0 +1,27 @@
+# Bí mật — KHÔNG BAO GIỜ đưa vào Git
+.env
+backend/.env
+*.env
+Token*.txt
+Pas user.xlsx
+*.pem
+*.key
+
+# Dữ liệu, sao lưu, tệp tải lên (chứa dữ liệu thật)
+backups/
+backend/uploads/
+*.dump
+*.sql.gz
+
+# Sinh tự động / môi trường
+node_modules/
+web-public/
+runtime-logs/
+backend/runtime.*.log
+*.log
+backend/tests/last-regression.txt
+
+# Bản sao lưu thủ công (đã chuyển ra _archive-VINA-MVP-02)
+*.bak
+*.bak-*
+*bak-before*

@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:14-alpine
+    container_name: vina-supervision-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vina_supervision
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema-VINA-PROD-01.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
