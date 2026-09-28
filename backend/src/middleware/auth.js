@@ -94,7 +94,7 @@ exports.login = async (req, res) => {
       // So khớp giả để thời gian phản hồi không lộ tên đăng nhập có tồn tại hay không
       await bcrypt.compare(password, DUMMY_HASH);
       recordFail(keys);
-      return res.status(401).json({ error: 'Invalid username or password' });
+      return res.status(401).json({ error: 'Tên đăng nhập hoặc mật khẩu không đúng' });
     }
 
     const hash = user.password_hash || '';
@@ -103,7 +103,7 @@ exports.login = async (req, res) => {
     const passwordMatches = demoLogin || (!placeholder && await bcrypt.compare(password, hash));
     if (!passwordMatches) {
       recordFail(keys);
-      return res.status(401).json({ error: 'Invalid username or password' });
+      return res.status(401).json({ error: 'Tên đăng nhập hoặc mật khẩu không đúng' });
     }
     loginFails.delete(keys[0][0]);
 

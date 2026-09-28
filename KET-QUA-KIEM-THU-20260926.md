@@ -57,6 +57,16 @@ Kết quả phải là `KẾT QUẢ: n/n mục đạt`. Mục nào LỖI có ghi
 | Cú pháp JavaScript `index.html` (6 khối) + `api.js` + toàn bộ `backend/src` | **0 lỗi** |
 | Giao diện (backend riêng cổng 3102, CSDL thử): Kỹ sư không thấy nút Sửa công trình; tệp khai báo `text/html` bị ép tải về; PDF mở trực tiếp; nút Sửa hồ sơ ẩn khi đã gửi duyệt | **Đạt** |
 
+## Đợt 14 — bản 2026-10-07.1 (khôi phục tự làm mới danh sách, thông báo đăng nhập tiếng Việt, chặn xóa nhầm CSDL)
+
+| Bộ | Kết quả |
+|---|---|
+| Kiểm thử máy chủ (40 ca = 39 cũ + 1 mới: đăng nhập sai trả thông báo tiếng Việt, và sai mật khẩu / không có tài khoản cùng một thông báo để không lộ tài khoản) | **40/40 đạt** |
+| Kiểm thử giao diện (15 ca) sau khi sửa | **15/15 đạt** |
+| Độ nhạy: sửa trước ca kiểm thử rồi mới sửa ứng dụng | Đúng quy trình — GD-12 **đỏ** khi còn đòi Ctrl+F5 và ca regression mới **đỏ** khi thông báo còn tiếng Anh; sau khi sửa ứng dụng thì cả hai xanh |
+| Cú pháp `index.html` (7 khối) + `api.js` + `sw.js` + khớp build 3 chỗ | **0 lỗi**, build 2026-10-07.1 |
+| Chốt an toàn hai script kiểm thử | Gọi `run-ui-tests.cmd zz_guard_test` (CSDL thật có bảng dấu) **trước khi sửa: CSDL bị xóa hẳn**; sau khi thêm chốt: script từ chối (exit 2), CSDL và bảng dấu còn nguyên. `run-regression.cmd zz_khong_hop_le` cũng bị từ chối, không tạo/không xóa gì |
+
 ## Đợt 13 — 28/09/2026 (bộ kiểm thử giao diện tự động; KHÔNG đổi mã ứng dụng, không đổi build)
 
 Môi trường: CSDL thử `vina_ui_claude` dựng từ `schema-VINA-PROD-01.sql` + toàn bộ migration + dữ liệu lỗi giống thực tế; backend cổng 3103; Chrome cài trên máy điều khiển bằng `playwright-core` (headless), service worker bị chặn, mỗi ca một browser context riêng. Không đụng CSDL thật.

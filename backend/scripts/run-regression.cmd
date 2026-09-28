@@ -5,6 +5,16 @@ REM   keep = giu lai CSDL thu sau khi chay (de kiem tra giao dien tren cong 3102
 setlocal
 set DB=%1
 if "%DB%"=="" set DB=vina_regr_claude
+REM CHOT AN TOAN: bo kiem thu XOA va TAO LAI CSDL duoc dat ten o day.
+REM Chi cho phep ten bat dau bang "vina_reg" (hoac "vina_ui") de mot lan go nham
+REM (vi du vina_supervision) khong the pha CSDL that.
+echo %DB% | findstr /B /I "vina_reg vina_ui" >nul
+if errorlevel 1 (
+  echo TU CHOI: ten CSDL thu phai bat dau bang "vina_reg" vi bo kiem thu se XOA va TAO LAI CSDL nay. Nhan duoc: %DB%
+  echo TU CHOI: ten CSDL thu phai bat dau bang "vina_reg". Nhan duoc: %DB%> "%~dp0..\tests\last-regression.txt"
+  endlocal
+  exit /b 2
+)
 set TEST_DB_URL=postgres://postgres:postgres@127.0.0.1:5432/%DB%
 cd /d %~dp0..
 set OUT=%~dp0..\tests\last-regression.txt

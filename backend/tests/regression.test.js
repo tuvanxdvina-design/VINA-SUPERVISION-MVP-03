@@ -635,3 +635,14 @@ test('xóa: cấp quyền Xóa cho nhân viên tại 1 công trình; chỉ Admin
   assert.ok((await api('GET', `/issues?project_id=${P['001']}`)).body.some(x => x.id === iss.id));
 });
 
+
+test('đăng nhập sai: thông báo bằng tiếng Việt, hai trường hợp giống nhau để không lộ tài khoản', async () => {
+  const c = await api('POST', '/users', { username: 'tv.thongbao', full_name: 'Thử thông báo', password: 'TamThoi123', role_name: 'ENGINEER' });
+  assert.ok([200, 201].includes(c.status), 'tạo tài khoản thử: ' + JSON.stringify(c.body));
+  const saiMatKhau = await api('POST', '/auth/login', { username: 'tv.thongbao', password: 'sai-mat-khau' }, null);
+  const khongCoNguoi = await api('POST', '/auth/login', { username: 'khong.co.nguoi.nay.2', password: 'sai-mat-khau' }, null);
+  assert.equal(saiMatKhau.status, 401);
+  assert.equal(khongCoNguoi.status, 401);
+  assert.match(String(saiMatKhau.body.error), /Tên đăng nhập hoặc mật khẩu/, 'thông báo phải bằng tiếng Việt: ' + saiMatKhau.body.error);
+  assert.equal(khongCoNguoi.body.error, saiMatKhau.body.error, 'sai mật khẩu và không có tài khoản phải cùng thông báo');
+});

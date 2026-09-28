@@ -1911,7 +1911,7 @@ async function saveChangePassword(){
  try{await apiRequest('/auth/change-password',{method:'POST',body:JSON.stringify({old_password:o,new_password:n})});alert('Đã đổi mật khẩu. Hãy đăng nhập lại bằng mật khẩu mới.');if(typeof clearAuthSession==='function')clearAuthSession();location.reload()}
  catch(error){m.textContent=error.message}
 }
-const APP_BUILD='2026-10-06.1';
+const APP_BUILD='2026-10-07.1';
 async function checkServerMigrations(){
  if(!apiOnline())return;
  try{const base=API_BASE.replace(/\/api$/,'');const h=await (await fetch(base+'/health',{cache:'no-store'})).json();
@@ -2478,7 +2478,12 @@ function renderTrash(){
 async function restoreTrash(id){
  if(!confirm('Khôi phục nội dung này về đúng vị trí cũ (kèm ảnh, tệp, số liệu)?'))return;
  try{const r=await apiRequest('/recycle-bin/'+encodeURIComponent(id)+'/restore',{method:'POST',body:'{}'});audit('RESTORE',r.type,r.id,'');save();
-  await loadTrash();if(typeof syncDocumentsFromApi==='function')void syncDocumentsFromApi();alert('Đã khôi phục. Tải lại trang (Ctrl+F5) nếu danh sách chưa hiện ngay.')}
+  await loadTrash();
+  // Tải lại đúng nhóm dữ liệu vừa khôi phục rồi vẽ lại, để người dùng thấy ngay mà không phải Ctrl+F5.
+  if(typeof syncDailyLogsFromApi==='function'){try{await syncDailyLogsFromApi()}catch(_){}}
+  if(typeof syncDocumentsFromApi==='function'){try{await syncDocumentsFromApi()}catch(_){}}
+  renderAll();if(typeof loadPortfolio==='function')void loadPortfolio();
+  alert(r.type==='project_progress_plans'?'Đã khôi phục bảng tiến độ. Xem ở Chi tiết công trình → Tiến độ thi công.':'Đã khôi phục.')}
  catch(error){alert('Không khôi phục được: '+error.message)}
 }
 async function purgeTrash(id){

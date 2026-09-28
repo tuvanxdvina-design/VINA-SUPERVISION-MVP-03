@@ -1,6 +1,6 @@
 // Xóa = chuyển vào Thùng rác: bắt buộc có lý do, khôi phục được, chỉ Admin xóa vĩnh viễn.
 const assert = require('node:assert/strict');
-const { uiTest, loginViaApi, openPage, tokenOf, apiAs, projectIdByContract } = require('../helpers');
+const { uiTest, waitForDialog, loginViaApi, openPage, tokenOf, apiAs, projectIdByContract } = require('../helpers');
 
 async function taoNhatKyQuaApi(who, congViec, ngay, ca) {
   const token = await tokenOf(who);
@@ -42,10 +42,10 @@ module.exports = function () {
     // Khôi phục → bản ghi trở lại danh sách nhật ký
     await page.locator('#trashBody tr', { hasText: congViec }).locator('button:has-text("Khôi phục")').first().click();
     await page.waitForFunction(t => !(document.getElementById('trashBody')?.innerText || '').includes(t), congViec);
-    assert.ok(page.__dialogs.some(m => m.includes('Đã khôi phục')), 'app phải báo đã khôi phục');
+    await waitForDialog(page, 'Đã khôi phục');
+    assert.ok(!page.__dialogs.some(m => m.includes('Ctrl+F5')), 'khôi phục xong không được bắt người dùng tự tải lại trang');
 
-    // App nhắc "Tải lại trang (Ctrl+F5) nếu danh sách chưa hiện ngay" → đi đúng đường người dùng làm.
-    await page.reload();
+    // Danh sách nhật ký phải tự hiện lại bản ghi, không cần tải lại trang.
     await openPage(page, 'daily');
     await page.waitForFunction(t => (document.getElementById('logsTable')?.innerText || '').includes(t), congViec);
   });

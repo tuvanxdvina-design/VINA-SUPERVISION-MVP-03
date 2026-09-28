@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'vina-supervision-shell-20261006-v36';
+const SHELL_CACHE = 'vina-supervision-shell-20261007-v37';
 const SHELL_FILES = ['./', './api.js', './favicon.ico'];
 
 self.addEventListener('install', event => {

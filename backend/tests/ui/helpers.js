@@ -81,6 +81,16 @@ function uiTest(name, fn) {
   });
 }
 
+// Chờ app hiện một hộp thoại có nội dung chứa `text` (hộp thoại do handler trong newPage ghi lại).
+async function waitForDialog(page, text, timeoutMs = 15000) {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    if (page.__dialogs.some(m => m.includes(text))) return true;
+    await page.waitForTimeout(200);
+  }
+  throw new Error('Không thấy hộp thoại chứa "' + text + '". Đã thấy: ' + JSON.stringify(page.__dialogs));
+}
+
 async function loginViaApi(page, who, password = 'demo') {
   const res = await page.request.post(BASE + '/api/auth/login', { data: { username: who, password } });
   assert.equal(res.status(), 200, 'Không đăng nhập được bằng API: ' + who);
@@ -142,4 +152,4 @@ async function projectIdByContract(token, contractNo) {
   return p.id;
 }
 
-module.exports = { PORT, BASE, DB_URL, startApp, stopApp, uiTest, loginViaApi, loginViaForm, openPage, navVisible, apiAs, tokenOf, projectIdByContract };
+module.exports = { PORT, BASE, DB_URL, startApp, stopApp, uiTest, waitForDialog, loginViaApi, loginViaForm, openPage, navVisible, apiAs, tokenOf, projectIdByContract };
