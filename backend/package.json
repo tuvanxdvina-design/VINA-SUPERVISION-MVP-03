@@ -4,10 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-  "start": "node server.js",
-  "dev": "node --watch server.js",
-  "test": "echo \"Error: no test specified\" && exit 1"
-},
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test tests/regression.test.js",
+    "test:ui": "node --test tests/ui/all.test.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -21,5 +22,8 @@
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.0",
     "uuid": "^14.0.2"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.63.0"
   }
 }

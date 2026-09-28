@@ -20,6 +20,9 @@ runtime-logs/
 backend/runtime.*.log
 *.log
 backend/tests/last-regression.txt
+backend/tests/last-ui-test.txt
+backend/tests/ui-artifacts/
+.superpowers/
 
 # Bản sao lưu thủ công (đã chuyển ra _archive-VINA-MVP-02)
 *.bak
