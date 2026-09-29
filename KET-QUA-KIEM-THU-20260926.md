@@ -109,3 +109,17 @@ Ba hành vi thật của ứng dụng được ca kiểm thử ghi lại (không
 | Kiểm thử máy chủ (29 ca = 26 cũ + 3 mới: tạo tài khoản từ Nhân sự → bị chặn tới khi đổi mật khẩu, đặt lại mật khẩu → lại phải đổi; báo cáo gửi → Trưởng TVGS nhận → trả lại bắt buộc có nội dung → người lập thấy lý do → gửi lại → phê duyệt, lịch sử 4 bước, người ngoài không xem được; nhật ký trả lại bắt buộc có nội dung kể cả hàng loạt) | **29/29 đạt** |
 | Cú pháp JavaScript `index.html` (7 khối) + `api.js` + `backend/src` | **0 lỗi** |
 | Giao diện: người chưa có tài khoản mặc định "Tạo mới" (không còn chọn sẵn tài khoản người khác); lưu → phiếu tài khoản; Trưởng TVGS thấy số đỏ + dải thông báo → Xem xét → trả lại khi trống bị chặn → trả lại có nội dung; người lập thấy số đỏ, nội dung yêu cầu, nhãn "Bị trả lại", lý do ở đầu cửa sổ sửa; tài khoản mật khẩu tạm bị khóa trong cửa sổ đổi mật khẩu (không đóng được) | **Đạt** |
+
+## Đợt 15 — bản 2026-10-08.1 (tách index.html thành 14 tệp tính năng + 7 tệp keo)
+
+| Bộ | Kết quả |
+|---|---|
+| `check-split.js <mốc> --bytes` sau khi tách nguyên văn 7 khối | **Khớp từng byte** — 251 494 byte, 7 khối → 7 phần |
+| `check-split.js <mốc>` sau khi gom theo tính năng | **Khớp tập đơn vị** — 377 đơn vị khác nhau, không thiếu, không thừa, không sửa nội dung |
+| `check-frontend.js` | 0 khối nội tuyến, 21 tệp `js/`, **0 lỗi**; đối chiếu đủ 3 danh sách (thẻ `<script src>`, `SHELL_FILES`, bộ lọc `fetch` của `sw.js`) |
+| Kiểm thử giao diện (17 ca) | **17/17 đạt** |
+| Kiểm thử máy chủ (40 ca) | **40/40 đạt** |
+| Kích thước tệp | Tệp lớn nhất 30 KB (trước: một khối 144 KB); tổng 246 KB |
+| `node --test backend/tests/jsUnits.test.js` | **6/6 đạt** — gồm ca chạy trên toàn bộ JS thật của `index.html` |
+
+Ba lỗi của bộ kiểm thử phát hiện trong đợt này (đã sửa, không phải lỗi ứng dụng): tệp tạm trong container dùng chung tên nên hai lượt chạy song song xoá tệp của nhau; `loginViaApi` chưa chờ quyền theo công trình tải xong nên nav "Việc cần duyệt" bị kiểm quá sớm; thời gian chờ mặc định 15 s quá chặt khi chạy đồng thời hai bộ trên cùng máy (nâng lên 25 s). Tên CSDL thử mặc định nay có phần ngẫu nhiên để hai lượt chạy không bao giờ tranh nhau.

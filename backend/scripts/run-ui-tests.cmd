@@ -4,7 +4,7 @@ REM Cach dung: backend\scripts\run-ui-tests.cmd [ten_csdl_thu] [mau_ten_ca]
 REM   Vi du: backend\scripts\run-ui-tests.cmd vina_ui_claude GD-06
 setlocal
 set DB=%1
-if "%DB%"=="" set DB=vina_ui_claude
+if "%DB%"=="" set DB=vina_ui_%RANDOM%
 REM CHOT AN TOAN: script nay DROP va TAO LAI CSDL duoc dat ten o day.
 REM Chi cho phep ten bat dau bang "vina_ui" de mot lan go nham (vi du vina_supervision)
 REM khong the pha CSDL that. Muon ten khac thi doi chot nay mot cach co y thuc.

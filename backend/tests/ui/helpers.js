@@ -47,8 +47,12 @@ async function stopApp() {
 async function newPage(name) {
   const context = await browser.newContext({ baseURL: BASE, serviceWorkers: 'block', viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
-  page.setDefaultTimeout(15000);
+  // 25s: khi chay cung luc voi bo regression + Docker, may tai nang nen 15s qua chat.
+  page.setDefaultTimeout(25000);
   page.__dialogs = [];
+  page.__console = [];
+  page.on('console', m => { if (m.type() === 'error') page.__console.push(m.text().slice(0, 300)); });
+  page.on('pageerror', e => page.__console.push('pageerror: ' + e.message.slice(0, 300)));
   page.on('dialog', async d => { page.__dialogs.push(d.message()); await d.accept(); });
   page.__name = name;
   await page.goto('/');
@@ -63,7 +67,8 @@ async function dump(page, name) {
     await page.screenshot({ path: path.join(ART, slug + '.png'), fullPage: true });
     const text = await page.evaluate(() => document.body.innerText.slice(0, 20000));
     fs.writeFileSync(path.join(ART, slug + '.txt'),
-      'HOP THOAI: ' + JSON.stringify(page.__dialogs) + '\n\n' + text, 'utf8');
+      'HOP THOAI: ' + JSON.stringify(page.__dialogs)
+      + '\nLOI CONSOLE: ' + JSON.stringify(page.__console || []) + '\n\n' + text, 'utf8');
   } catch (_) { /* lỗi khi chụp không được che lỗi thật của ca */ }
 }
 
@@ -100,8 +105,12 @@ async function loginViaApi(page, who, password = 'demo') {
   // app đang ở trạng thái chưa đăng nhập có thể tự đăng xuất/tải lại và phá context đánh giá.
   // Gọi lại hàm này với người khác sẽ ghi đè phiên (script nạp sau thắng) → đổi tài khoản được.
   await page.addInitScript(a => { try { localStorage.setItem('vina_supervision_auth', a); } catch (_) {} }, auth);
+  // Quyền theo công trình được tải bất đồng bộ và quyết định nav "Việc cần duyệt"/"Thùng rác"
+  // ẩn hay hiện. Phải chờ lời gọi đó xong, nếu không ca kiểm thử sẽ đỏ ngẫu nhiên khi máy tải nặng.
+  const quyenDaTai = page.waitForResponse(r => /my-permissions/.test(r.url()), { timeout: 10000 }).catch(() => null);
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('nav button[data-page="projects"]', { state: 'visible' });
+  await quyenDaTai;
   return data.user;
 }
 

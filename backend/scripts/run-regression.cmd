@@ -4,7 +4,7 @@ REM Cach dung: backend\scripts\run-regression.cmd [ten_csdl_thu] [keep]
 REM   keep = giu lai CSDL thu sau khi chay (de kiem tra giao dien tren cong 3102)
 setlocal
 set DB=%1
-if "%DB%"=="" set DB=vina_regr_claude
+if "%DB%"=="" set DB=vina_regr_%RANDOM%
 REM CHOT AN TOAN: bo kiem thu XOA va TAO LAI CSDL duoc dat ten o day.
 REM Chi cho phep ten bat dau bang "vina_reg" (hoac "vina_ui") de mot lan go nham
 REM (vi du vina_supervision) khong the pha CSDL that.

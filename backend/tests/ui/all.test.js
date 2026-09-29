@@ -19,3 +19,4 @@ require('./cases/05-tra-lai-va-khoa-sua')();
 require('./cases/06-ho-so')();
 require('./cases/07-quyen-theo-chuc-danh')();
 require('./cases/08-thung-rac')();
+require('./cases/09-ha-tang-js')();
