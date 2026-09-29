@@ -78,6 +78,27 @@ backend/scripts/run-ui-tests.cmd
 5. Nếu có sửa `index.html`: bump build 3 chỗ (`backend/src/build.js`, `APP_BUILD`, `sw.js`), chạy `node backend\scripts\check-frontend.js`.
 6. Cập nhật `docs/CODEMAP.md` (mục Tests), `CAP-NHAT-20260926.md`, `KET-QUA-KIEM-THU-20260926.md`; commit; nhắc người dùng chạy `.\run.bat` + Ctrl+F5 (chỉ khi có bump build).
 
-## 7. Giai đoạn 2 (phiên riêng, sau khi 12 ca xanh và đã commit làm mốc)
+## 7. Giai đoạn 2 (đã xong 29/09/2026, xem `2026-09-28-tach-index-html-design.md`)
 
-Tách `index.html` thành các file JS theo tính năng, theo nhóm hàm đã ghi trong `docs/CODEMAP.md`. Bộ 12 ca này là điều kiện nghiệm thu của đợt tách đó. Thiết kế chi tiết đợt tách sẽ có spec riêng.
+Tách `index.html` thành các file JS theo tính năng. Bộ 12 ca P1 đã dùng làm điều kiện nghiệm thu — xanh trước/sau, không sửa nội dung ca nào.
+
+## 8. Nhóm P2 (12 ca, làm sau khi P1 + tách file đã xong)
+
+Chốt lúc lập kế hoạch P1 (2026-09-28), thứ tự triển khai không quan trọng bằng thứ tự trong bảng — nhóm theo tính năng để gộp lượt chạy.
+
+| Mã | Tài khoản | Các bước | Kỳ vọng |
+|---|---|---|---|
+| GD-13 | `hung` | Trình một nhật ký/hồ sơ vượt thẩm quyền lên công ty (escalate), ghi chú bắt buộc | Ghi chú rỗng bị chặn; sau khi trình: chỉ `admin`/`duong` còn thấy nút quyết định, `hung` không tự duyệt lại được |
+| GD-14 | `thanhb` | Đính kèm 1 ảnh + 1 PDF vào nhật ký | Danh sách tệp đúng; PDF/ảnh mở xem tại chỗ (inline); tệp `.html`/`.svg` (nếu thử) buộc tải về, không mở tại chỗ |
+| GD-15 | `admin`, `thanhb` | Sửa thông tin hợp đồng công trình | `admin` lưu → tải lại vẫn còn; `thanhb` không thấy nút sửa |
+| GD-16 | `hung` | Kế hoạch tiến độ: thêm hạng mục, lưu, nhập số liệu thực tế | Lưu xong có đường S (SVG); nhập thực tế → % hoàn thành đổi theo |
+| GD-17 | `hung` | Lập báo cáo tuần từ dữ liệu nhật ký | Trình soạn có số liệu tổng hợp đúng; sau khi lưu, sửa dữ liệu nguồn không làm đổi số đã lưu (snapshot) |
+| GD-18 | `thanhb` | Tạo vấn đề chất lượng → in phiếu → đóng vấn đề | Phiếu in có letterhead; đóng xong đổi trạng thái, không sửa được nữa |
+| GD-19 | `thanhb` | Nhập nội dung nhật ký chứa `<img src=x onerror=alert(1)>` | Hiển thị dưới dạng văn bản thô, không có hộp thoại `alert` nào bật lên |
+| GD-20 | `thanhb` | Chặn mạng (`page.context().setOffline(true)`) → tạo vấn đề mới → bật mạng lại | Lúc mất mạng: vào hàng đợi đồng bộ cục bộ, không lỗi; sau khi có mạng: tự đồng bộ lên máy chủ, hàng đợi rỗng |
+| GD-21 | tài khoản bất kỳ | Token hết hạn/không hợp lệ, gọi một API bất kỳ nhận 401 | Tự đưa về màn hình đăng nhập, không kẹt màn hình trắng hay vòng lặp lỗi |
+| GD-22 | `admin` | Đổi tên nhân sự trên hồ sơ khác với tên tài khoản đăng nhập | Hiện chip cảnh báo lệch tên; bấm "Đúng người" đóng băng tên tác giả cũ trên các bản ghi đã có trước đó |
+| GD-23 | `thanhb` | Lập nhiều nhật ký cùng lúc qua thao tác hàng loạt (`logBulk`) | Tạo đủ số ngày yêu cầu, không trùng ca, không tạo thiếu/thừa |
+| GD-24 | `admin` | Vào Thiết lập, đổi quyền tùy chỉnh của một thành viên tại một công trình | Có hiệu lực ngay: đăng nhập lại bằng tài khoản đó (hoặc tải lại quyền) thấy đúng quyền vừa đổi |
+
+Ghi chú khi triển khai: các nhóm hàm liên quan nay nằm ở `js/04-tien-do.js` (GD-16), `js/06-ho-so.js`+`js/07-bao-cao.js` (GD-14, GD-17), `js/08-chat-luong.js` (GD-18, GD-19), `js/09-nhan-su.js`+`js/10-tai-khoan.js` (GD-22, GD-24), `js/11-duyet.js` (GD-13), `js/05-nhat-ky.js` (GD-20, GD-23), `js/12-dang-nhap.js`/`js/02-quyen.js` (GD-21) — nhờ đợt tách Giai đoạn 2, tra selector rẻ hơn hẳn so với đọc `index.html` 270 KB.
