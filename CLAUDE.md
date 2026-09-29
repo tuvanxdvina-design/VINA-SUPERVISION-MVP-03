@@ -7,7 +7,7 @@ Construction-supervision (TVGS) management app for a Vietnamese consulting firm.
 - Backend: Node 24 + Express 5 + PostgreSQL 14 (Docker container `vina-supervision-db`, DB `vina_supervision`, app user `vina_user`). Entry `backend/server.js` → `backend/src/app.js`.
   - `src/routes/*.js` (HTTP, auth/permission checks) → `src/services/*.js` (SQL). No ORM; raw `pool.query`.
   - `src/utils/db.js` (DATE type returned as 'YYYY-MM-DD' string), `src/utils/fileSafety.js` (serve uploads safely).
-- Frontend: single file `index.html` (~270 KB, all JS inline, 7 `<script>` blocks) + `api.js` (fetch wrapper, API→local mappers) + `sw.js`. Served by backend at `/` (port 3001) and copied to `web-public/` by `run.bat` (port 8080). **Edit root files only**, never `web-public/`.
+- Frontend: `index.html` (HTML + CSS + các thẻ `<script src>`, không còn JS nội tuyến) + **`js/01-core.js` … `js/14-dang-nhap.js`** (mỗi tệp một tính năng, ≤30 KB) + 7 tệp keo `js/*glue*|00-khoi-dong|03-font-fix` (mã chạy ngay lúc nạp — **vị trí trong thứ tự nạp là quan trọng**) + `api.js` (fetch wrapper, API→local mappers) + `sw.js`. Bảng "hàm nào ở tệp nào": `docs/CODEMAP.md`. **Mã mới đặt vào tệp tính năng tương ứng.** Thêm tệp `js/` mới → phải có cả thẻ `<script src>` trong `index.html` và tên trong `SHELL_FILES` của `sw.js` (`check-frontend.js` báo nếu thiếu). Served by backend at `/` (port 3001) and copied to `web-public/` by `run.bat` (port 8080). **Edit root files only**, never `web-public/`.
 - Local state in `localStorage` (`db` object: projects, logs, docs, issues, sync queue); server is source of truth.
 - Migrations: `migrations/YYYYMMDD_name.sql`, each wrapped in BEGIN/COMMIT, idempotent (`IF NOT EXISTS`). Applied by `migrate-db.ps1` as `postgres` (run.bat does it automatically with backup). Recorded in `schema_migrations`. Latest: `20261005_recycle_bin.sql`.
 - Base schema `schema-VINA-PROD-01.sql` is OLD; real schema = schema + all migrations.
@@ -21,6 +21,8 @@ Construction-supervision (TVGS) management app for a Vietnamese consulting firm.
 6. Tell the user to run `.\run.bat` + Ctrl+F5.
 
 ## Testing (shell output in this environment is unreliable → always write to a file, then Read/Grep it)
+- **Nghiệm thu bằng MỘT lệnh**: `backend\scripts\kiem-tra-tat-ca.cmd` → chạy cú pháp giao diện + regression + giao diện (tuần tự) rồi ghi tóm tắt 3 dòng vào `backend\tests\last-summary.txt`. Đọc một tệp đó là biết đủ (~2 phút). Tên CSDL thử mặc định có phần ngẫu nhiên nên hai lượt chạy không tranh nhau.
+- Di chuyển mã giữa các tệp `js/` → `node backend\scripts\check-split.js <commit-trước-khi-di-chuyển>` (thêm `--bytes` khi tách nguyên văn) để chứng minh không mất/không sửa đơn vị mã; `node --test backend/tests/jsUnits.test.js` kiểm chính bộ tách.
 - Regression: `backend\scripts\run-regression.cmd [dbname]` → results in `backend\tests\last-regression.txt` (Grep `ℹ pass|ℹ fail|✖`). Takes ~2 min; poll the file. Use a unique db name (another tool may use `vina_regression`).
 - Giao diện (14 ca): `backend\scripts\run-ui-tests.cmd [dbname] [mẫu tên ca]` → `backend\tests\last-ui-test.txt` (~50 s; playwright-core + Chrome của máy, cổng 3103, CSDL `vina_ui_claude`; ảnh lỗi ở `backend/tests/ui-artifacts/`). **Sửa `index.html`/`api.js` → chạy bộ này.** Mẫu tên ca là regex, không dùng dấu `|` (dùng `GD-0[67]`). Chi tiết ca + selector: `docs/CODEMAP.md`.
 - Syntax: `node backend\scripts\check-frontend.js` (inline scripts + api.js + sw.js + build id match); `node --check <file>` for backend files.
@@ -53,8 +55,9 @@ Construction-supervision (TVGS) management app for a Vietnamese consulting firm.
 - One feature per session; keep this file and `docs/CODEMAP.md` updated when adding files/functions/rules (that is what makes new sessions cheap).
 - Model: Sonnet for routine edits; Opus for permission/workflow design, migrations on real data, security, large refactors.
 - Git (local only, no remote): `C:\Program Files\Git\cmd\git.exe` (may not be on PATH in the tool shell — use full path). Repo initialized 2026-09-28, first commit `a1546c1` = build 2026-10-06.1. `core.autocrlf=false`. Start a session with `git log --oneline -n 10` + `git status --short` to see what changed since last time (incl. user's own edits); use `git diff` instead of re-reading files. **Commit after each verified change** (message in Vietnamese: what + why + build id). Before committing, confirm no secret is staged (`.env`, `Token*.txt`, `Pas user.xlsx`, backups, uploads are ignored).
-- Bộ kiểm thử giao diện đã xong (14 ca, `backend/tests/ui/`, xong 28/09/2026) — đây là lưới an toàn cho đợt tách `index.html`.
-- Next planned big task (own session, Opus): tách `index.html` thành các file JS theo tính năng; điều kiện nghiệm thu = 14 ca giao diện vẫn xanh **mà không phải sửa nội dung ca nào**. Sau đó làm nhóm P2 (12 ca còn lại trong `docs/superpowers/specs/2026-09-28-kiem-thu-giao-dien-design.md`).
+- Bộ kiểm thử giao diện: 16 ca + 2 ca chống xanh giả (`backend/tests/ui/`, xong 28/09/2026) — lưới an toàn của mọi thay đổi giao diện.
+- Đợt tách `index.html` đã xong (29/09/2026): 14 tệp tính năng + 7 tệp keo trong `js/`, chứng minh bằng `check-split.js` (khớp tập đơn vị mã) và 17/17 ca giao diện.
+- Next planned big task: nhóm P2 — 12 ca kiểm thử giao diện còn lại trong `docs/superpowers/specs/2026-09-28-kiem-thu-giao-dien-design.md` (đính kèm tệp, đường S, báo cáo tuần, XSS, ngoại tuyến, hết hạn token, lệch tên tài khoản, nhật ký hàng loạt, sửa quyền, chuyển cấp công ty).
 
 ## Known issues / hazards
 - `JWT_SECRET` in `backend/.env` is still the placeholder (security banner shown). `Token eyJ….txt` and `Pas user.xlsx` in root contain secrets — do not open, do not publish, never commit.

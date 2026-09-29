@@ -50,6 +50,8 @@ module.exports = function () {
       'việc đã gửi phải xuất hiện trong "Việc cần duyệt" của Trưởng TVGS');
 
     await openPage(page, 'daily');
+    // Danh sách nhật ký của người khác đến từ đồng bộ máy chủ — chờ dòng hiện ra trước khi bấm.
+    await page.waitForFunction(t => (document.getElementById('logsTable')?.innerText || '').includes(t), congViec, { timeout: 25000 });
     const row = () => page.locator('#logsTable tr', { hasText: congViec });
     // Bấm "Duyệt" mở modal "Xem xét và phê duyệt" (ý kiến không bắt buộc khi phê duyệt).
     await row().locator('text="Duyệt"').first().click();

@@ -21,6 +21,7 @@ backend/runtime.*.log
 *.log
 backend/tests/last-regression.txt
 backend/tests/last-ui-test.txt
+backend/tests/last-summary.txt
 backend/tests/ui-artifacts/
 .superpowers/
 
