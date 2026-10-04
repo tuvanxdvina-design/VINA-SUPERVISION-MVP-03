@@ -7,6 +7,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test tests/regression.test.js",
+    "test:security": "node --test tests/security-config.test.js",
     "test:ui": "node --test tests/ui/all.test.js",
     "test:pwa": "node scripts/check-pwa.js"
   },

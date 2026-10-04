@@ -8,6 +8,7 @@ const errorHandler = require('./middleware/errorHandler');
 const auditMiddleware = require('./middleware/audit');
 const pool = require('./utils/db');
 const { BUILD } = require('./build');
+const security = require('./config/security');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -19,7 +20,8 @@ const app = express();
 const webRoot = path.resolve(__dirname, '..', '..');
 
 // Khóa ký token còn là chuỗi mẫu → ai biết chuỗi này đều giả mạo được token Admin.
-const weakSecret = !process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32 || /your_super_secret|change_in_production/i.test(process.env.JWT_SECRET);
+security.assertProductionSecurity();
+const weakSecret = security.isWeakJwtSecret(process.env.JWT_SECRET);
 if (weakSecret) console.warn('⚠️  JWT_SECRET trong backend/.env đang là chuỗi mẫu hoặc quá ngắn. Hãy đổi thành chuỗi ngẫu nhiên ≥ 32 ký tự (mọi người sẽ phải đăng nhập lại).');
 
 app.disable('x-powered-by');
@@ -33,11 +35,7 @@ app.use((req, res, next) => {
 // Middleware
 app.use(express.json({ limit: '16mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(','),
-  credentials: true,
-  exposedHeaders: ['Content-Disposition']
-}));
+app.use(cors(security.buildCorsOptions()));
 app.use(auditMiddleware.auditMiddleware);
 
 // Health check
