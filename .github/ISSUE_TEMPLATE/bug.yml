@@ -1,0 +1,46 @@
+name: Loi can sua
+description: Giao mot loi rieng le cho ChatGPT/Codex xu ly
+title: "[BUG] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Moi issue chi nen gom mot loi. Ghi ngan gon du buoc tai hien de phien moi khong can doc lai lich su chat.
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Buoc tai hien
+      description: Tai khoan/vai tro, trang, nut bam, du lieu nhap, thiet bi neu lien quan.
+      placeholder: |
+        1. Dang nhap bang ...
+        2. Mo trang ...
+        3. Bam ...
+        4. Thay ...
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Ket qua thuc te
+      placeholder: Mo ta loi, thong bao, log, anh chup, hoac CI step do.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ket qua mong muon
+      placeholder: Hanh vi dung can dat.
+    validations:
+      required: true
+  - type: input
+    id: scope
+    attributes:
+      label: Pham vi nghi ngo
+      placeholder: "Vi du: UI nhat ky, API /daily-logs, CI UI tests, phan quyen..."
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Bang chung
+      placeholder: Link Actions, anh chup, log ngan, artifact, commit, thiet bi/trinh duyet.

@@ -2,6 +2,12 @@
 
 Line numbers drift; locate with `Grep "function <name>" index.html -n`, then Read ~30 lines around it.
 
+## ChatGPT handoff
+
+Phien moi khong can doc lai lich su hoi thoai. Bat dau tu GitHub Issue dang duoc giao, doc `chatGPT.md`, roi dung CODEMAP nay de mo dung file lien quan. Moi loi tach thanh mot GitHub Issue rieng, co buoc tai hien ngan gon, ket qua thuc te, ket qua mong muon va bang chung neu co.
+
+Khi sua xong, day ma len GitHub va doc ket qua CI tren Actions. Chi chay local test nang khi CI khong du thong tin hoac can lap lai mot ca hep.
+
 ## Backend (backend/src)
 | Feature | Route file | Service file | Tables |
 |---|---|---|---|
