@@ -8,6 +8,8 @@ Phien moi khong can doc lai lich su hoi thoai. Bat dau tu GitHub Issue dang duoc
 
 Khi sua xong, day ma len GitHub va doc ket qua CI tren Actions. Chi chay local test nang khi CI khong du thong tin hoac can lap lai mot ca hep.
 
+Chon model theo bang trong `chatGPT.md`: mac dinh dung Luna cho viec ro/pham vi hep, Sol cho debug/sua logic nhieu buoc, Astra cho bao mat, kien truc, review quan trong hoac yeu cau mo ho.
+
 ## Backend (backend/src)
 | Feature | Route file | Service file | Tables |
 |---|---|---|---|
