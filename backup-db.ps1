@@ -9,10 +9,14 @@ $dir = Join-Path $root 'backups'
 New-Item -ItemType Directory -Path $dir -Force | Out-Null
 $stamp = Get-Date -Format 'yyyy-MM-dd-HHmm'
 $name = "vina-supervision-$stamp-$Label.dump"
-$container = 'vina-supervision-db'
+Push-Location $root
+try {
+  $container = (& docker compose ps -q postgres).Trim()
+} finally { Pop-Location }
+if (-not $container) { throw 'Khong tim thay container PostgreSQL cua du an hien tai.' }
 
 docker exec $container pg_dump -U postgres -d vina_supervision -Fc -f "/tmp/$name"
-if ($LASTEXITCODE -ne 0) { throw 'pg_dump that bai (kiem tra Docker dang chay va ten container vina-supervision-db)' }
+if ($LASTEXITCODE -ne 0) { throw 'pg_dump that bai (kiem tra PostgreSQL cua du an dang chay)' }
 docker cp "${container}:/tmp/$name" (Join-Path $dir $name)
 if ($LASTEXITCODE -ne 0) { throw 'Khong chep duoc tep sao luu ra khoi container' }
 docker exec $container rm -f "/tmp/$name" | Out-Null

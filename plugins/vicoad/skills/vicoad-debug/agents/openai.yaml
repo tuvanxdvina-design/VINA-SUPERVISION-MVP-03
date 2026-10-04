@@ -1,0 +1,6 @@
+interface:
+  display_name: "VICOAD — Chẩn đoán lỗi"
+  short_description: "Chẩn đoán lỗi cho phần mềm quản lý TVGS"
+  default_prompt: "Dùng $vicoad-debug để xử lý yêu cầu hiện tại của dự án TVGS."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE issues
+  ADD COLUMN IF NOT EXISTS details jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+COMMIT;

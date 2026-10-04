@@ -10,10 +10,23 @@ async function taoNhatKyQuaGiaoDien(page, { ngay, congViec, guiDuyet = false }) 
   await page.waitForSelector('#modal.show #lwork', { state: 'visible' });
   await page.fill('#ldate', ngay);
   await page.fill('#lwork', congViec);
-  await page.fill('#lworkers', '5');
+  await page.fill('#workforceRows .lr-type', 'Tho xay');
+  await page.fill('#workforceRows .lr-count', '5');
   await page.click(`#modal >> text="${guiDuyet ? 'Lưu và gửi duyệt' : 'Lưu nháp'}"`);
   await page.waitForSelector('#modal.show', { state: 'hidden' });
   await page.waitForFunction(t => (document.getElementById('logsTable')?.innerText || '').includes(t), congViec);
+  if (!guiDuyet) {
+    await page.waitForFunction(t => {
+      const row = [...document.querySelectorAll('#logsTable tr')].find(r => r.innerText.includes(t));
+      return row && !![...row.querySelectorAll('button')].find(b => b.textContent.includes('Gửi duyệt'));
+    }, congViec);
+  }
+  if (guiDuyet) {
+    await page.waitForFunction(t => {
+      const row = [...document.querySelectorAll('#logsTable tr')].find(r => r.innerText.includes(t));
+      return row && row.innerText.includes('Chờ duyệt');
+    }, congViec);
+  }
   return congViec;
 }
 

@@ -1,0 +1,22 @@
+{
+  "name": "vicoad",
+  "version": "0.1.0",
+  "description": "Workflows phát triển và nghiệp vụ TVGS cho VINA Supervision.",
+  "author": {
+    "name": "VICOAD"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "VICOAD",
+    "shortDescription": "Trợ lý phát triển phần mềm quản lý TVGS",
+    "longDescription": "Bảy skills chọn workflow theo yêu cầu, bám cấu trúc VINA Supervision và kiểm thử phù hợp.",
+    "developerName": "VICOAD",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": [
+      "Phân tích lỗi hiện tại của dự án TVGS.",
+      "Thiết kế chức năng nghiệm thu vật liệu.",
+      "Rà soát thay đổi trước khi bàn giao."
+    ]
+  }
+}

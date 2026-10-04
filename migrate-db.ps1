@@ -7,22 +7,44 @@
 param([switch]$Status, [switch]$AutoBackup)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$container = 'vina-supervision-db'
 $db = 'vina_supervision'
+
+Push-Location $root
+try {
+  $container = (& docker compose ps -q postgres).Trim()
+} finally { Pop-Location }
+if (-not $container) { throw 'Khong tim thay container PostgreSQL cua du an hien tai.' }
 
 # Doc ten tai khoan ung dung trong backend\.env de cap quyen sau migration
 $appUser = 'vina_user'
+$appPassword = ''
 $envFile = Join-Path $root 'backend\.env'
 if (Test-Path $envFile) {
-  $line = Get-Content $envFile | Where-Object { $_ -match '^\s*DB_USER\s*=' } | Select-Object -First 1
+  $envLines = Get-Content $envFile
+  $line = $envLines | Where-Object { $_ -match '^\s*DB_USER\s*=' } | Select-Object -First 1
   if ($line) { $appUser = ($line -split '=', 2)[1].Trim() }
+  $line = $envLines | Where-Object { $_ -match '^\s*DB_PASSWORD\s*=' } | Select-Object -First 1
+  if ($line) { $appPassword = ($line -split '=', 2)[1].Trim() }
 }
+if ($appUser -notmatch '^[a-z_][a-z0-9_]*$') { throw 'DB_USER khong hop le.' }
+if (-not $appPassword) { throw 'DB_PASSWORD dang trong trong backend\.env.' }
 
 function Invoke-Psql([string]$sql) {
   $out = docker exec $container psql -U postgres -d $db -v ON_ERROR_STOP=1 -tA -c $sql
   if ($LASTEXITCODE -ne 0) { throw "psql loi khi chay: $sql" }
   return $out
 }
+
+# Dam bao container moi co tai khoan ung dung rieng, dung mat khau trong backend\.env.
+$safePassword = $appPassword.Replace("'", "''")
+$roleExists = Invoke-Psql "SELECT 1 FROM pg_roles WHERE rolname = '$appUser'"
+if ($roleExists) {
+  Invoke-Psql "ALTER ROLE $appUser WITH LOGIN PASSWORD '$safePassword'" | Out-Null
+} else {
+  Invoke-Psql "CREATE ROLE $appUser WITH LOGIN PASSWORD '$safePassword'" | Out-Null
+}
+Invoke-Psql "GRANT CONNECT ON DATABASE $db TO $appUser" | Out-Null
+Invoke-Psql "GRANT USAGE ON SCHEMA public TO $appUser" | Out-Null
 
 Invoke-Psql "CREATE TABLE IF NOT EXISTS schema_migrations (file_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT NOW())" | Out-Null
 Invoke-Psql "ALTER TABLE schema_migrations OWNER TO postgres" | Out-Null

@@ -21,6 +21,8 @@ function persistLocal(){
 }
 const save=()=>{persistLocal();renderAll()};
 function queueSync(type,recordId,operation='UPSERT',payload={}){db.sync.push({id:id(),type,recordId,operation,payload,queuedAt:new Date().toISOString(),status:'PENDING'})}
+function syncConflict(type,recordId){return (db.sync||[]).find(x=>x.type===type&&x.recordId===recordId&&x.status==='CONFLICT')||null}
+function syncConflictChip(type,recordId){const q=syncConflict(type,recordId);return q?'<span class="chip danger" title="'+esc(q.lastError||'Dữ liệu đã thay đổi trên thiết bị khác')+'">Cần đối chiếu</span>':''}
 const id=()=>crypto.randomUUID ? crypto.randomUUID() :
   'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
     const r=crypto.getRandomValues(new Uint8Array(1))[0]&15;
@@ -55,7 +57,7 @@ function canEdit(){return [
 function canCreateLogIn(projectId){if(canManageAssignments())return true;return qualityPermissions(projectId).includes('CREATE')}
 function isPrivilegedLogEditor(){return canManageAssignments()}
 function renderSelects(){['logProject','issueProject','docProject'].forEach(sid=>{let el=document.getElementById(sid);if(el){let old=el.value;el.innerHTML='<option value="">Tất cả công trình</option>'+projectsOptions(old);el.value=old||''}})}
-function goPage(page){if(page==='dashboard'&&!canViewDashboard())page='projects';if(page==='settings'&&!canManageAssignments())page='projects';document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));const btn=document.querySelector(`nav button[data-page="${page}"]`);if(btn)btn.classList.add('active');document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(page).classList.add('active')}
+function goPage(page){if(page==='dashboard'&&!canViewDashboard())page='projects';if(page==='settings'&&!canManageAssignments())page='projects';document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));const navPage=['projectDetail','docs'].includes(page)?'projects':page;const btn=document.querySelector(`nav button[data-page="${navPage}"]`);if(btn)btn.classList.add('active');document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(page).classList.add('active')}
 function goDashboard(){currentProjectId=null;goPage('dashboard');renderAll()}
 function logStatusBadge(st){return '<span class="badge '+String(st||'').toLowerCase()+'">'+esc(LOG_STATUS[st]||st||'')+'</span>'}
 function logActionsHtml(x){
@@ -78,14 +80,16 @@ async function showLogFiles(logId){
 }
 async function logAction(logId,action,silent){
  const l=db.logs.find(v=>v.id===logId);if(!l?.serverId)return alert('Nhật ký chưa lên máy chủ.');
+ if(action==='submit'&&typeof queuedFileCount==='function'&&await queuedFileCount('daily_log',l.id))return alert('Nhật ký còn ảnh hoặc tài liệu chưa đồng bộ. Hãy kết nối mạng và chờ tải xong trước khi gửi duyệt.');
  if((action==='approve'||action==='reject')&&!silent)return openReviewDecision('daily_logs',l.serverId,action);
  const ask={submit:'Gửi nhật ký này cho Trưởng TVGS duyệt? Sau khi gửi sẽ không sửa được (trừ khi bị trả lại).',reject:'Trả lại nhật ký cho người lập sửa?',lock:'Khóa nhật ký? Nhật ký đã khóa là hồ sơ chính thức.'}[action];
  if(ask&&!silent&&!confirm(ask))return;
- try{const r=await apiRequest('/daily-logs/'+encodeURIComponent(l.serverId)+'/'+action,{method:'POST'});l.status=r.status;l.version=Number(r.version||l.version||1);l.canEdit=false;audit(action.toUpperCase(),'daily_log',l.serverId,l.date+' '+shiftLabel(l.shift));save()}
+ try{const r=await apiRequest('/daily-logs/'+encodeURIComponent(l.serverId)+'/'+action,{method:'POST'});l.status=r.status;l.version=Number(r.version||l.version||1);l.rowVersion=Number(r.row_version||l.rowVersion||1);l.updatedAt=r.updated_at||l.updatedAt;l.submittedAt=r.submitted_at||l.submittedAt;l.canEdit=false;audit(action.toUpperCase(),'daily_log',l.serverId,l.date+' '+shiftLabel(l.shift));save();if(typeof syncDailyLogsFromApi==='function')await syncDailyLogsFromApi()}
  catch(error){alert('Không thực hiện được: '+error.message)}
 }
 async function logBulk(action,ids){
  if(!ids.length)return;
+ if(action==='submit'&&typeof queuedFileCount==='function'){const blocked=[];for(const id of ids)if(await queuedFileCount('daily_log',id))blocked.push(id);if(blocked.length)return alert(blocked.length+' nhật ký còn ảnh hoặc tài liệu chưa đồng bộ. Hãy kết nối mạng và chờ tải xong trước khi gửi duyệt.')}
  const label={submit:'Gửi duyệt',approve:'Duyệt',lock:'Khóa'}[action];
  if(!confirm(label+' '+ids.length+' nhật ký?'))return;
  try{const r=await apiRequest('/daily-logs/bulk',{method:'POST',body:JSON.stringify({action,ids:ids.map(id=>db.logs.find(l=>l.id===id)?.serverId).filter(Boolean)})});
@@ -117,7 +121,8 @@ function applyParsed(result){
 }
 function wideModal(){document.querySelector('#modal .modalbox')?.classList.add('wide')}
 function renderAll(){
-const qualityNav=document.querySelector('nav button[data-page="issues"]');if(qualityNav)qualityNav.innerHTML='⚠ <span>Chất lượng công trình</span>';const qualityHeading=document.querySelector('#issues h2');if(qualityHeading)qualityHeading.textContent='Chất lượng công trình';
+const identity=document.getElementById('sessionIdentity');if(identity){const u=typeof getAuthUser==='function'?getAuthUser():null;const roleNames={ADMIN:'Quản trị',DIRECTOR:'Giám đốc',MANAGER:'Quản lý',TVGS_LEAD:'Trưởng TVGS',ENGINEER:'Giám sát viên'};const name=u?.full_name||u?.username||'';const username=u?.username&&u.username!==name?' ('+u.username+')':'';const role=roleNames[u?.role_name]||u?.role_name||db.role||'';identity.innerHTML=name?'<strong>'+esc(name+username)+'</strong><small>'+esc(role)+'</small>':'';identity.title=name+(role?' - '+role:'')}
+const qualityNavLabel=document.querySelector('nav button[data-page="issues"] .nav-label');if(qualityNavLabel)qualityNavLabel.textContent='Chất lượng';const qualityHeading=document.querySelector('#issues h2');if(qualityHeading)qualityHeading.textContent='Chất lượng công trình';
 const addPersonButton=document.getElementById('addPersonButton');if(addPersonButton)addPersonButton.style.display=canManageAssignments()?'':'none';
 const settingsNav=document.querySelector('nav button[data-page="settings"]');if(settingsNav)settingsNav.style.display=canManageAssignments()?'':'none';if(!canManageAssignments()&&document.getElementById('settings')?.classList.contains('active'))goPage('projects');
 if(typeof applyInboxNavVisibility==='function')applyInboxNavVisibility();

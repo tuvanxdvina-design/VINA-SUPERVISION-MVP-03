@@ -4,10 +4,10 @@ Construction-supervision (TVGS) management app for a Vietnamese consulting firm.
 **Do not re-read whole files.** Use this guide + `docs/CODEMAP.md`, then Grep for the function you need and Read only that range.
 
 ## Stack & layout
-- Backend: Node 24 + Express 5 + PostgreSQL 14 (Docker container `vina-supervision-db`, DB `vina_supervision`, app user `vina_user`). Entry `backend/server.js` → `backend/src/app.js`.
+- Backend: Node 24 + Express 5 + PostgreSQL 14 (container lấy động bằng `docker compose ps -q postgres`, cổng máy `5433`, DB `vina_supervision`, app user `vina_user`). Entry `backend/server.js` → `backend/src/app.js`.
   - `src/routes/*.js` (HTTP, auth/permission checks) → `src/services/*.js` (SQL). No ORM; raw `pool.query`.
   - `src/utils/db.js` (DATE type returned as 'YYYY-MM-DD' string), `src/utils/fileSafety.js` (serve uploads safely).
-- Frontend: `index.html` (HTML + CSS + các thẻ `<script src>`, không còn JS nội tuyến) + **`js/01-core.js` … `js/14-dang-nhap.js`** (mỗi tệp một tính năng, ≤30 KB) + 7 tệp keo `js/*glue*|00-khoi-dong|03-font-fix` (mã chạy ngay lúc nạp — **vị trí trong thứ tự nạp là quan trọng**) + `api.js` (fetch wrapper, API→local mappers) + `sw.js`. Bảng "hàm nào ở tệp nào": `docs/CODEMAP.md`. **Mã mới đặt vào tệp tính năng tương ứng.** Thêm tệp `js/` mới → phải có cả thẻ `<script src>` trong `index.html` và tên trong `SHELL_FILES` của `sw.js` (`check-frontend.js` báo nếu thiếu). Served by backend at `/` (port 3001) and copied to `web-public/` by `run.bat` (port 8080). **Edit root files only**, never `web-public/`.
+- Frontend: `index.html` (HTML + CSS + các thẻ `<script src>`, không còn JS nội tuyến) + **`js/01-core.js` … `js/14-dang-nhap.js`** (mỗi tệp một tính năng, ≤30 KB) + 7 tệp keo `js/*glue*|00-khoi-dong|03-font-fix` (mã chạy ngay lúc nạp — **vị trí trong thứ tự nạp là quan trọng**) + `api.js` (fetch wrapper, API→local mappers) + `sw.js`. Bảng "hàm nào ở tệp nào": `docs/CODEMAP.md`. **Mã mới đặt vào tệp tính năng tương ứng.** Thêm tệp `js/` mới → phải có cả thẻ `<script src>` trong `index.html` và tên trong `SHELL_FILES` của `sw.js` (`check-frontend.js` báo nếu thiếu). Served by backend at `/` (port 3002) and copied to `web-public/` by `run.bat` (port 8081). **Edit root files only**, never `web-public/`.
 - Local state in `localStorage` (`db` object: projects, logs, docs, issues, sync queue); server is source of truth.
 - Migrations: `migrations/YYYYMMDD_name.sql`, each wrapped in BEGIN/COMMIT, idempotent (`IF NOT EXISTS`). Applied by `migrate-db.ps1` as `postgres` (run.bat does it automatically with backup). Recorded in `schema_migrations`. Latest: `20261005_recycle_bin.sql`.
 - Base schema `schema-VINA-PROD-01.sql` is OLD; real schema = schema + all migrations.
@@ -28,7 +28,7 @@ Construction-supervision (TVGS) management app for a Vietnamese consulting firm.
 - Syntax: `node backend\scripts\check-frontend.js` (inline scripts + api.js + sw.js + build id match); `node --check <file>` for backend files.
 - Launch long commands detached (`Start-Process cmd.exe -ArgumentList '/c', ... -WindowStyle Hidden`) and redirect to a file; the PowerShell tool gets killed on long sleeps — poll with Grep / short waits.
 - UI check: start a 2nd backend on port 3102 pointed at the test DB (env PORT/DB_NAME/NODE_ENV=development, seed users log in with password `demo`), open in browser pane, drive via `javascript_exec`. Screenshots time out in this pane — inspect DOM text instead. Never type passwords into forms; fetch `/api/auth/login` from JS with test fixture creds.
-- Real DB: **read-only** queries only (`docker exec -i vina-supervision-db psql -U postgres -d vina_supervision`). Never write to it; never restart the user's backend (port 3001).
+- Real DB: **read-only** queries only; lấy đúng container của repo bằng `docker compose ps -q postgres` trước khi truy vấn. Never write to it; never restart the user's backend (port 3002).
 
 ## Domain rules (decided with the user — do not re-litigate)
 - Legal basis: Nghị định **207/2026/NĐ-CP** (effective 01/07/2026) replaced 06/2021.

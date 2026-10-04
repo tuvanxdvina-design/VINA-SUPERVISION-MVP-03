@@ -64,9 +64,16 @@ app.use('/js', express.static(path.join(webRoot, 'js'), { extensions: false, ind
 app.get('/', (req, res) => res.sendFile(path.join(webRoot, 'index.html')));
 app.get('/api.js', (req, res) => res.sendFile(path.join(webRoot, 'api.js')));
 app.get('/favicon.ico', (req, res) => res.sendFile(path.join(webRoot, 'favicon.ico')));
+app.get('/manifest.webmanifest', (req, res) => res.type('application/manifest+json').sendFile(path.join(webRoot, 'manifest.webmanifest')));
 app.get('/assets/vicoad-logo.png', (req, res) => res.sendFile(path.join(webRoot, 'assets', 'vicoad-logo.png')));
+app.get('/assets/app-icon-180.png', (req, res) => res.sendFile(path.join(webRoot, 'assets', 'app-icon-180.png')));
+app.get('/assets/app-icon-192.png', (req, res) => res.sendFile(path.join(webRoot, 'assets', 'app-icon-192.png')));
+app.get('/assets/app-icon-512.png', (req, res) => res.sendFile(path.join(webRoot, 'assets', 'app-icon-512.png')));
 app.get('/assets/mau-bang-tien-do.xlsx', (req, res) => res.download(path.join(webRoot, 'assets', 'mau-bang-tien-do.xlsx'), 'mau-bang-tien-do.xlsx'));
-app.get('/sw.js', (req, res) => res.sendFile(path.join(webRoot, 'sw.js')));
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(webRoot, 'sw.js'));
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -86,4 +93,3 @@ app.use('/api/recycle-bin', require('./routes/recycleBin'));
 app.use(errorHandler.errorHandler);
 
 module.exports = app;
-

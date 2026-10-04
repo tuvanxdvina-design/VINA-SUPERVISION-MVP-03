@@ -43,6 +43,13 @@ function openReport(docId=''){
  document.querySelector('#modal .modalbox')?.classList.add('wide');
  renderReportEditor();
 }
+function openDailyConsolidation(projectId,date){
+ const selector=document.getElementById('reportProject');if(selector)selector.value=projectId;
+ goPage('reports');openReport();
+ const type=document.getElementById('rpType');if(!type)return;type.value='DAILY';
+ document.getElementById('rpPeriod').innerHTML=periodInputsHtml('DAILY',{from:date||todayIso()});
+ document.getElementById('rpFrom').value=date||todayIso();reportDraft.snapshot=null;void compileReport();
+}
 async function compileReport(){
  const msg=document.getElementById('rpMessage');const pid=document.getElementById('rpProject').value;const type=document.getElementById('rpType').value;
  let from=document.getElementById('rpFrom')?.value||'';const to=document.getElementById('rpTo')?.value||'';
@@ -73,7 +80,8 @@ async function saveReport(submit){
  const pid=document.getElementById('rpProject').value;const type=s.type;
  const name=REPORT_TYPES[type]+' '+reportPeriodLabel(type,s.period.from,s.period.to);
  const files=[...(document.getElementById('rpFiles')?.files||[])];if(files.some(f=>f.size>MAX_DOC_FILE)){msg.textContent='Có tệp vượt 15 MB.';return}
- const body={project_id:pid,doc_group:'REPORT',type:'BC',name,details:{reportType:type,from:s.period.from,to:s.period.to,snapshot:s,sections:reportDraft.sections}};
+ const currentDoc=reportDraft.docId?db.docs.find(v=>v.id===reportDraft.docId||v.serverId===reportDraft.docId):null;
+ const body={project_id:pid,doc_group:'REPORT',type:'BC',name,details:{reportType:type,from:s.period.from,to:s.period.to,snapshot:s,sections:reportDraft.sections},expected_row_version:currentDoc?.rowVersion??null};
  const btn=document.getElementById('rpSave');if(btn)btn.disabled=true;
  try{
   // Nhập/điều chỉnh % thực tế trong báo cáo → ghi vào bảng tiến độ tại ngày so sánh, rồi tổng hợp lại số liệu
@@ -98,7 +106,7 @@ function reportBodyHtml(s,{sections,code,title}={}){
  const t=(rows,head)=>rows.length?'<table class="rp"><thead><tr>'+head.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.join('')+'</tbody></table>':'<p class="muted">Không có.</p>';
  const td=v=>'<td>'+esc(v??'')+'</td>';
  let exec='';
- if(s.type==='DAILY')exec=t(s.logs.map(l=>'<tr>'+td(shiftLabel(l.shift))+td(l.work)+td(l.weather)+td(l.workers)+td(l.machines)+td(l.note)+td(l.created_by)+'</tr>'),['Ca','Công việc thực hiện','Thời tiết','Nhân lực','Máy','Ghi chú','Người lập']);
+ if(s.type==='DAILY')exec=t(s.logs.map(l=>'<tr>'+td(shiftLabel(l.shift))+td(l.contractor_unit)+td(l.work_item)+td(l.weather)+td(l.technical_staff)+td((l.workforce_details||[]).map(r=>(r.type||'Nhân lực')+': '+r.count).join('; ')||l.workers)+td((l.machine_details||[]).map(r=>(r.type||'Máy')+': '+r.count).join('; ')||l.machines)+td(l.work)+td(l.recommendation)+td(l.created_by)+'</tr>'),['Ca','Đơn vị thi công','Hạng mục','Thời tiết','CBKT','Nhân công','Máy','Công việc','Kiến nghị','Người lập']);
  else if(s.type==='FINAL'){const m={};s.logs.forEach(l=>{const k=l.date.slice(0,7);const x=m[k]=m[k]||{days:new Set(),n:0,w:0};x.days.add(l.date);x.n++;x.w+=Number(l.workers||0)});exec=t(Object.entries(m).map(([k,x])=>'<tr>'+td(k.slice(5)+'/'+k.slice(0,4))+td(x.days.size)+td(x.n)+td(Math.round(x.w/Math.max(1,x.days.size)))+'</tr>'),['Tháng','Số ngày có nhật ký','Số nhật ký','Nhân lực TB/ngày'])}
  else exec=t(sumByDay(s.logs).map(x=>'<tr>'+td(progressDate(x.date))+td(x.shifts.join(', '))+td(x.work.join('; '))+td(x.weather.join(', '))+td(x.workers)+td(x.machines)+'</tr>'),['Ngày','Ca','Công việc thực hiện','Thời tiết','Nhân lực','Máy']);
  const secs=REPORT_SECTIONS[s.type==='FINAL'?'FINAL':'DEFAULT'];
@@ -108,6 +116,7 @@ function reportBodyHtml(s,{sections,code,title}={}){
   +'<h3>II. Tình hình thi công trong kỳ</h3><p>Số nhật ký: <b>'+st.log_count+'</b> · Số ngày có nhật ký: <b>'+st.days_with_logs+'/'+st.days_in_period+'</b> · Nhân lực bình quân: <b>'+st.workers_avg+'</b> người/ngày (cao nhất '+st.workers_max+') · Máy bình quân: <b>'+st.machines_avg+'</b> · Ảnh hiện trường: <b>'+st.photos+'</b></p>'
   +(st.missing_days?.length?'<p style="color:#b54708">Ngày chưa có nhật ký: '+st.missing_days.map(progressDate).join(', ')+'</p>':'')
   +(st.by_status?.DRAFT||st.by_status?.SUBMITTED?'<p style="color:#b54708">Nhật ký chưa được duyệt trong kỳ: '+((st.by_status.DRAFT||0)+(st.by_status.SUBMITTED||0))+'</p>':'')
+  +(st.by_inspector?.length?t(st.by_inspector.map(i=>'<tr>'+td(i.name)+td(i.log_count)+td(i.workers)+td(i.machines)+td(i.photos)+'</tr>'),['Giám sát viên','Số báo cáo','Nhân công ghi nhận','Máy ghi nhận','Ảnh']):'')
   +exec
   +'<h3>III. Tiến độ</h3>'+(pr?'<p>Bảng tiến độ: <b>'+esc(pr.plan_name)+'</b>'+(pr.is_extension&&pr.revised_end_date?' (gia hạn đến '+progressDate(pr.revised_end_date)+')':'')+'</p><table class="rp"><thead><tr><th>Kế hoạch lũy kế</th><th>Thực tế lũy kế</th><th>Chênh lệch</th><th>SPI</th>'+(pr.period_actual_gain!==null?'<th>KH tăng trong kỳ</th><th>TT tăng trong kỳ</th>':'')+'</tr></thead><tbody><tr>'+td(pr.planned_percent+'%')+td(pr.actual_percent+'%')+td((pr.variance>0?'+':'')+pr.variance+' điểm %')+td(pr.spi??'—')+(pr.period_actual_gain!==null?td(pr.period_planned_gain+'%')+td(pr.period_actual_gain+'%'):'')+'</tr></tbody></table>'+(pr.mode!=='ITEMS'?'<p class="muted">Bảng tiến độ chưa có hạng mục: tỷ lệ là số nhập tay.</p>':'')+(pr.late_items.length?'<p><b>Hạng mục chậm/quá hạn:</b></p>'+t(pr.late_items.map(i=>'<tr>'+td(i.name)+td(i.planned+'%')+td(i.actual+'%')+td(progressDate(i.end_date))+'</tr>'),['Hạng mục','KH','TT','Hạn']):''):'<p class="muted">Chưa có bảng tiến độ.</p>')
   +reportItemsTableHtml(s)

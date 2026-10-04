@@ -8,7 +8,6 @@ const { sendStoredFile } = require('../utils/fileSafety');
 
 const router = express.Router();
 const creators = [rbac.ROLES.ADMIN, rbac.ROLES.DIRECTOR];
-const editors = [rbac.ROLES.ADMIN, rbac.ROLES.DIRECTOR, rbac.ROLES.TVGS_LEAD];
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function validProject(data) {
@@ -16,7 +15,9 @@ function validProject(data) {
     typeof data.name === 'string' && data.name.trim() &&
     typeof data.contract_no === 'string' && data.contract_no.trim() &&
     (data.id === undefined || uuidPattern.test(data.id)) &&
-    (data.progress === undefined || (Number.isFinite(Number(data.progress)) && Number(data.progress) >= 0 && Number(data.progress) <= 100));
+    (data.progress === undefined || (Number.isFinite(Number(data.progress)) && Number(data.progress) >= 0 && Number(data.progress) <= 100)) &&
+    (data.contract_duration_days == null || (Number.isInteger(Number(data.contract_duration_days)) && Number(data.contract_duration_days) > 0)) &&
+    (data.contractor_duration_days == null || (Number.isInteger(Number(data.contractor_duration_days)) && Number(data.contractor_duration_days) > 0));
 }
 
 function sendError(res, error) {
@@ -28,6 +29,20 @@ function sendError(res, error) {
 }
 
 router.use(auth.verifyToken);
+
+async function requireProjectLead(req, res, next) {
+  try {
+    const permissionService = require('../services/permissionService');
+    const permissions = await permissionService.forUser(req.user.userId, req.projectId);
+    if (!permissionService.canApprove(permissions)) {
+      return res.status(403).json({ error: 'Chỉ người phụ trách tại công trình, Giám đốc hoặc Admin được sửa thông tin này' });
+    }
+    req.projectPermissions = permissions;
+    next();
+  } catch (error) {
+    sendError(res, error);
+  }
+}
 
 router.get('/', async (req, res) => {
   try {
@@ -62,7 +77,7 @@ router.post('/', rbac.checkRole(creators), async (req, res) => {
   }
 });
 
-router.patch('/:id', access.projectParam, rbac.checkRole(editors), async (req, res) => {
+router.patch('/:id', access.projectParam, requireProjectLead, async (req, res) => {
   if (!uuidPattern.test(req.params.id) || !validProject(req.body)) {
     return res.status(400).json({ error: 'Thiếu hoặc sai thông tin công trình' });
   }
@@ -70,11 +85,39 @@ router.patch('/:id', access.projectParam, rbac.checkRole(editors), async (req, r
     const before = await projectService.getProjectById(req.params.id);
     if (!before) return res.status(404).json({ error: 'Không tìm thấy công trình' });
     const project = await projectService.updateProject(req.params.id, req.body);
+    if (!project && req.body.expected_row_version != null) {
+      return res.status(409).json({ code: 'EDIT_CONFLICT', error: 'Công trình đã được cập nhật ở thiết bị khác. Hãy tải lại dữ liệu rồi thực hiện lại.' });
+    }
+    if (!project) return res.status(404).json({ error: 'Không tìm thấy công trình' });
     await req.audit('projects', project.id, 'UPDATE', before, project, req.user.userId);
     res.json(project);
   } catch (error) {
     sendError(res, error);
   }
+});
+
+const MAX_PROJECT_FILE = 25 * 1024 * 1024;
+router.post('/:id/files', access.projectParam, requireProjectLead, express.raw({ type: () => true, limit: MAX_PROJECT_FILE + 1024 }), async (req, res) => {
+  try {
+    if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'Tệp rỗng' });
+    if (req.body.length > MAX_PROJECT_FILE) return res.status(413).json({ error: 'Mỗi tệp công trình tối đa 25 MB' });
+    const category = String(req.query.category || 'PROJECT_DOCUMENT').slice(0, 80);
+    const name = String(req.query.name || 'tai-lieu').slice(0, 255);
+    const file = await projectService.addFile(req.params.id, category, name, String(req.headers['content-type'] || 'application/octet-stream').slice(0, 120), req.body, req.user.userId);
+    if (file.created) await req.audit('project_files', file.id, 'CREATE', null, { project_id: req.params.id, category, name, size: req.body.length }, req.user.userId);
+    res.status(file.created ? 201 : 200).json(file);
+  } catch (error) {
+    if (error.type === 'entity.too.large') return res.status(413).json({ error: 'Mỗi tệp công trình tối đa 25 MB' });
+    sendError(res, error);
+  }
+});
+
+router.get('/:id/files/:fileId', access.projectParam, async (req, res) => {
+  try {
+    const file = await projectService.getFile(req.params.id, req.params.fileId);
+    if (!file) return res.status(404).json({ error: 'Không tìm thấy tệp' });
+    sendStoredFile(res, file, req.query.download);
+  } catch (error) { sendError(res, error); }
 });
 
 
@@ -155,7 +198,7 @@ router.get('/:id/progress-plans/:planId/file', access.projectParam, async (req, 
   } catch (error) { sendError(res, error); }
 });
 
-router.post('/:id/progress-plans', access.projectParam, rbac.checkRole(editors), async (req, res) => {
+router.post('/:id/progress-plans', access.projectParam, requireProjectLead, async (req, res) => {
   const data = req.body || {};
   const err = validPlan(data, true);
   if (err) return res.status(400).json({ error: err });
@@ -166,7 +209,7 @@ router.post('/:id/progress-plans', access.projectParam, rbac.checkRole(editors),
   } catch (error) { sendError(res, error); }
 });
 
-router.patch('/:id/progress-plans/:planId', access.projectParam, rbac.checkRole(editors), async (req, res) => {
+router.patch('/:id/progress-plans/:planId', access.projectParam, requireProjectLead, async (req, res) => {
   const data = req.body || {};
   const err = validPlan(data, false);
   if (err) return res.status(400).json({ error: err });

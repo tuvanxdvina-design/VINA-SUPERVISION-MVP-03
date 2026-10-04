@@ -122,6 +122,14 @@ router.post('/:id/attachments', permissionService.requirePermission('CREATE'), a
   }
 });
 
+router.post('/:id/attachments-binary', permissionService.requirePermission('CREATE'), express.raw({ type: () => true, limit: 8 * 1024 * 1024 + 1024 }), async (req, res) => {
+  try {
+    const { attachment, created } = await attachments.saveBuffer(req.params.id, req.user.userId, String(req.query.name || 'anh-hien-truong').slice(0, 255), String(req.headers['content-type'] || ''), req.body);
+    if (created) await req.audit('attachments', attachment.id, 'CREATE', null, attachment, req.user.userId);
+    res.status(created ? 201 : 200).json(attachment);
+  } catch (error) { res.status(error.status || 500).json({ error: error.status ? error.message : 'Không lưu được ảnh' }); }
+});
+
 // POST /api/daily-logs (create DRAFT)
 // Lập nhật ký: theo quyền "Thêm" tại công trình (tùy chỉnh hoặc mặc định theo vai trò).
 router.post('/', access.body, permissionService.requirePermission('CREATE'), async (req, res) => {
@@ -139,7 +147,7 @@ router.post('/', access.body, permissionService.requirePermission('CREATE'), asy
     if (created) await req.audit('daily_logs', log.id, 'CREATE', null, log, req.user.userId);
     res.status(created ? 201 : 200).json(log);
   } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'Nhật ký cùng ngày và ca đã tồn tại' });
+    if (err.code === '23505') return res.status(409).json({ error: 'Tài khoản này đã có nhật ký trong cùng ngày và ca' });
     res.status(500).json({ error: err.message });
   }
 });
@@ -150,12 +158,16 @@ router.patch('/:id', async (req, res) => {
     const perms = await permissionService.forUser(req.user.userId, req.projectId);
     const log = await dailyLogService.updateDailyLog(req.params.id, req.body, req.user.userId, perms);
     if (!log) {
+      const current = await dailyLogService.getDailyLogById(req.params.id);
+      if (current && req.body.expected_row_version != null && Number(current.row_version) !== Number(req.body.expected_row_version)) {
+        return res.status(409).json({ code: 'EDIT_CONFLICT', error: 'Nhật ký đã được cập nhật ở thiết bị khác. Bản trên thiết bị này vẫn được giữ để đối chiếu.' });
+      }
       return res.status(409).json({ error: 'Nhật ký không tồn tại hoặc không còn ở trạng thái DRAFT' });
     }
     await req.audit('daily_logs', req.params.id, log.status === 'LOCKED' ? 'UPDATE_LOCKED' : 'UPDATE', null, log, req.user.userId);
     res.json(log);
   } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'Nhật ký cùng ngày và ca đã tồn tại' });
+    if (err.code === '23505') return res.status(409).json({ error: 'Tài khoản này đã có nhật ký trong cùng ngày và ca' });
     res.status(500).json({ error: err.message });
   }
 });

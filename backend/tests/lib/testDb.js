@@ -6,7 +6,15 @@ const path = require('path');
 const fs = require('fs');
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
-const CONTAINER = 'vina-supervision-db';
+let containerId = '';
+
+function dockerContainer() {
+  if (!containerId) {
+    containerId = execFileSync('docker', ['compose', 'ps', '-q', 'postgres'], { cwd: ROOT, encoding: 'utf8' }).trim();
+    if (!containerId) throw new Error('Khong tim thay container PostgreSQL cua du an hien tai');
+  }
+  return containerId;
+}
 
 function hasNativePsql() {
   try { execFileSync('psql', ['--version'], { stdio: 'ignore' }); return true; } catch (_) { return false; }
@@ -22,7 +30,7 @@ function createTestDb(dbUrl) {
 
   function psql(sql, url = dbUrl) {
     if (nativePsql) return execFileSync('psql', [url, '-v', 'ON_ERROR_STOP=1', '-qtA', '-c', sql], { encoding: 'utf8' }).trim();
-    return execFileSync('docker', ['exec', CONTAINER, 'psql', '-U', dbUserFromUrl(url), '-d', dbFromUrl(url), '-v', 'ON_ERROR_STOP=1', '-qtA', '-c', sql], { encoding: 'utf8' }).trim();
+    return execFileSync('docker', ['exec', dockerContainer(), 'psql', '-U', dbUserFromUrl(url), '-d', dbFromUrl(url), '-v', 'ON_ERROR_STOP=1', '-qtA', '-c', sql], { encoding: 'utf8' }).trim();
   }
 
   function psqlFile(file) {
@@ -30,9 +38,9 @@ function createTestDb(dbUrl) {
     // Tên riêng theo CSDL + tiến trình: hai bộ kiểm thử chạy song song (giao diện + regression)
     // dùng chung /tmp của container, dùng tên chung thì bộ này xoá tệp lúc bộ kia đang nạp.
     const remote = '/tmp/vina-test-' + dbName + '-' + process.pid + '-' + path.basename(file);
-    execFileSync('docker', ['cp', file, CONTAINER + ':' + remote], { stdio: 'pipe' });
-    try { execFileSync('docker', ['exec', CONTAINER, 'psql', '-U', dbUserFromUrl(dbUrl), '-d', dbName, '-v', 'ON_ERROR_STOP=1', '-q', '-f', remote], { stdio: 'pipe' }); }
-    finally { try { execFileSync('docker', ['exec', CONTAINER, 'rm', '-f', remote], { stdio: 'ignore' }); } catch (_) {} }
+    execFileSync('docker', ['cp', file, dockerContainer() + ':' + remote], { stdio: 'pipe' });
+    try { execFileSync('docker', ['exec', dockerContainer(), 'psql', '-U', dbUserFromUrl(dbUrl), '-d', dbName, '-v', 'ON_ERROR_STOP=1', '-q', '-f', remote], { stdio: 'pipe' }); }
+    finally { try { execFileSync('docker', ['exec', dockerContainer(), 'rm', '-f', remote], { stdio: 'ignore' }); } catch (_) {} }
   }
 
   function resetDatabase() {
@@ -41,8 +49,8 @@ function createTestDb(dbUrl) {
       psql('CREATE DATABASE ' + dbName, adminUrl.href);
       return;
     }
-    execFileSync('docker', ['exec', CONTAINER, 'dropdb', '-U', 'postgres', '--if-exists', dbName], { stdio: 'pipe' });
-    execFileSync('docker', ['exec', CONTAINER, 'createdb', '-U', 'postgres', '-O', dbUserFromUrl(dbUrl), dbName], { stdio: 'pipe' });
+    execFileSync('docker', ['exec', dockerContainer(), 'dropdb', '-U', 'postgres', '--if-exists', dbName], { stdio: 'pipe' });
+    execFileSync('docker', ['exec', dockerContainer(), 'createdb', '-U', 'postgres', '-O', dbUserFromUrl(dbUrl), dbName], { stdio: 'pipe' });
   }
 
   function migrationFiles() {

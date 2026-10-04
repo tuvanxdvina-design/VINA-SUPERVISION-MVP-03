@@ -68,6 +68,8 @@ router.patch('/:id', loadDoc, async (req, res) => {
   try {
     if (!await canModify(req, req.doc)) return res.status(403).json({ error: 'Không có quyền sửa hồ sơ này' });
     const doc = await documentService.updateDocument(req.params.id, req.body, req.user.userId);
+    if (!doc && req.body.expected_row_version != null) return res.status(409).json({ code: 'EDIT_CONFLICT', error: 'Hồ sơ hoặc báo cáo đã được cập nhật ở thiết bị khác. Hãy tải lại trước khi sửa tiếp.' });
+    if (!doc) return res.status(404).json({ error: 'Không tìm thấy hồ sơ' });
     await req.audit('documents', doc.id, req.doc.status === 'LOCKED' ? 'UPDATE_LOCKED' : 'UPDATE', { name: req.doc.name, details: req.doc.details }, { name: doc.name, details: doc.details }, req.user.userId);
     res.json(doc);
   } catch (e) { fail(res, e); }

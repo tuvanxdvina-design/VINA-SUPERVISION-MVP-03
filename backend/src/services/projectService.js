@@ -1,5 +1,16 @@
 const pool = require('../utils/db');
 const { randomUUID } = require('crypto');
+const fileStore = require('./fileStore');
+
+async function attachFiles(projects) {
+  if (!projects.length) return projects;
+  const ids = projects.map(p => p.id);
+  const rows = (await pool.query(`SELECT id, project_id, category, file_name, file_type, file_size, uploaded_at
+    FROM project_files WHERE project_id = ANY($1::uuid[]) ORDER BY uploaded_at, id`, [ids])).rows;
+  const grouped = new Map();
+  for (const file of rows) { if (!grouped.has(file.project_id)) grouped.set(file.project_id, []); grouped.get(file.project_id).push(file); }
+  return projects.map(p => ({ ...p, files: grouped.get(p.id) || [] }));
+}
 
 function projectValues(data) {
   return [
@@ -20,7 +31,15 @@ function projectValues(data) {
     data.contractor_contract_no || null,
     data.contractor_contract_date || null,
     data.contractor_contract_value ?? null,
-    data.contractor_contract_content || null
+    data.contractor_contract_content || null,
+    data.consultant_contract_type || null,
+    data.consultant_price_type || null,
+    data.contract_duration_days ?? null,
+    data.contractor_contract_type || null,
+    data.contractor_price_type || null,
+    data.contractor_start_date || null,
+    data.contractor_end_date || null,
+    data.contractor_duration_days ?? null
   ];
 }
 
@@ -39,12 +58,12 @@ class ProjectService {
       )
       ORDER BY p.created_at DESC
     `, [userId]);
-    return result.rows;
+    return attachFiles(result.rows);
   }
 
   async getProjectById(id) {
     const result = await pool.query('SELECT * FROM projects WHERE id = $1', [id]);
-    return result.rows[0];
+    return (await attachFiles(result.rows))[0];
   }
 
   async createProject(data) {
@@ -59,10 +78,13 @@ class ProjectService {
         owner_name, contractor_name, contract_date, start_date, end_date,
         contract_value, contract_content, progress, status,
         contractor_contract_no, contractor_contract_date, contractor_contract_value, contractor_contract_content,
+        consultant_contract_type, consultant_price_type, contract_duration_days,
+        contractor_contract_type, contractor_price_type, contractor_start_date, contractor_end_date, contractor_duration_days,
         created_by, location, description
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15, $16, $17, $18, $19, $20, $5, $13
+        $12, $13, $14, $15, $16, $17, $18, $19,
+        $20, $21, $22, $23, $24, $25, $26, $27, $28, $5, $13
       )
       ON CONFLICT (id) DO NOTHING
       RETURNING *
@@ -99,12 +121,34 @@ class ProjectService {
         progress = $13, status = $14,
         contractor_contract_no = $15, contractor_contract_date = $16,
         contractor_contract_value = $17, contractor_contract_content = $18,
+        consultant_contract_type = $19, consultant_price_type = $20, contract_duration_days = $21,
+        contractor_contract_type = $22, contractor_price_type = $23,
+        contractor_start_date = $24, contractor_end_date = $25, contractor_duration_days = $26,
         location = $4, description = $12,
-        updated_at = NOW()
-      WHERE id = $19
+        row_version = row_version + 1, updated_at = NOW()
+      WHERE id = $27 AND ($28::integer IS NULL OR row_version = $28)
       RETURNING *
-    `, [...values, id]);
+    `, [...values, id, data.expected_row_version ?? null]);
     return result.rows[0];
+  }
+
+  async addFile(projectId, category, name, type, buffer, userId) {
+    const stored = await fileStore.put(buffer);
+    const result = await pool.query(`INSERT INTO project_files
+      (project_id, category, file_name, file_type, file_size, sha256, storage_key, uploaded_by)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      ON CONFLICT (project_id, category, sha256) DO UPDATE SET file_name=EXCLUDED.file_name
+      RETURNING id, project_id, category, file_name, file_type, file_size, uploaded_at, (xmax=0) AS created`,
+    [projectId, category, name, type, buffer.length, stored.sha256, stored.storageKey, userId]);
+    if (result.rows[0]) await pool.query('UPDATE projects SET row_version = row_version + 1, updated_at = NOW() WHERE id = $1', [projectId]);
+    return result.rows[0];
+  }
+
+  async getFile(projectId, fileId) {
+    const row = (await pool.query('SELECT file_name, file_type, storage_key FROM project_files WHERE project_id=$1 AND id=$2', [projectId, fileId])).rows[0];
+    if (!row) return null;
+    const buffer = await fileStore.get(row.storage_key);
+    return buffer ? { name: row.file_name, type: row.file_type, buffer } : null;
   }
 }
 

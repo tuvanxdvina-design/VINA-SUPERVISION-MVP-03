@@ -6,13 +6,15 @@ const { uiTest, loginViaApi, openPage } = require('../helpers');
 module.exports = function () {
   uiTest('GD-10 hồ sơ: mã tự sinh và đi đủ nháp → gửi → duyệt → khóa', async (page) => {
     await loginViaApi(page, 'hung'); // Trưởng TVGS: có quyền Thêm và Duyệt tại công trình 001
-    await openPage(page, 'docs');
-    await page.click('#docs >> text="+ Tạo hồ sơ"');
+    await openPage(page, 'projects');
+    await page.locator('#projectsTable button', { hasText: 'Chi tiết' }).first().click();
+    await page.click('#pdNewDocBtn');
     await page.waitForSelector('#modal.show #dname', { state: 'visible' });
     const ten = 'GD-10 Bien ban nghiem thu mong';
     await page.fill('#dname', ten);
     await page.click('#docSaveBtn');
     await page.waitForSelector('#modal.show', { state: 'hidden' });
+    await page.locator('#projectDetail button', { hasText: 'Xem tất cả' }).click();
     await page.waitForFunction(t => (document.getElementById('docsTable')?.innerText || '').includes(t), ten);
 
     const row = () => page.locator('#docsTable tr', { hasText: ten });

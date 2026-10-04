@@ -1,0 +1,6 @@
+interface:
+  display_name: "VICOAD — Hỏi nhanh"
+  short_description: "Hỏi nhanh cho phần mềm quản lý TVGS"
+  default_prompt: "Dùng $vicoad-quick để xử lý yêu cầu hiện tại của dự án TVGS."
+policy:
+  allow_implicit_invocation: true

@@ -19,7 +19,7 @@ async function loadProjectProgressPlans(projectId,asOf){
 async function syncInitialProgressPlans(){
  if(!apiOnline())return;const pending=db.pendingInitialProgressPlans||{};
  for(const [projectId,plan] of Object.entries(pending)){
-  try{await apiRequest('/projects/'+encodeURIComponent(projectId)+'/progress-plans',{method:'POST',body:JSON.stringify(plan)});delete db.pendingInitialProgressPlans[projectId];save()}
+  try{let body={...plan};if(body.attachment_queue_id){const q=await queuedFile(body.attachment_queue_id);if(!q)throw new Error('Không còn tệp tiến độ chờ trên thiết bị');body.attachment={name:q.name,type:q.type,size:q.size,data:await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>no(r.error);r.readAsDataURL(q.blob)})};delete body.attachment_queue_id}await apiRequest('/projects/'+encodeURIComponent(projectId)+'/progress-plans',{method:'POST',body:JSON.stringify(body)});if(plan.attachment_queue_id)await removeQueuedFile(plan.attachment_queue_id);delete db.pendingInitialProgressPlans[projectId];save()}
   catch(error){console.warn('Chưa đồng bộ được bảng tiến độ cơ sở:',error.message)}
  }
 }
@@ -36,7 +36,7 @@ function sCurveSvg(curve,asOf){
 function renderProjectProgress(p){
  const box=document.getElementById('pdProgress');if(!box)return;
  const plans=db.progressPlans?.[p.id]||[];const detail=db.progressDetail?.[p.id];const current=plans.find(x=>x.is_current)||plans[0]||null;
- const edit=canEditProject();
+ const edit=canEditProject(p.id);
  let html='<div class="toolbar" style="margin:0 0 10px"><h3 style="margin:0">Tiến độ thi công</h3>'
   +(current&&detail?.summary?.mode==='ITEMS'&&canUpdateActual(p.id)?'<button class="primary" onclick="openProgressActuals(&quot;'+p.id+'&quot;)">Cập nhật thực tế</button>':'')
   +(current&&edit?'<button onclick="openProgressPlan(&quot;'+p.id+'&quot;,&quot;'+current.id+'&quot;)">Sửa bảng tiến độ</button>':'')
@@ -82,7 +82,7 @@ async function setCurrentProgressPlan(projectId,planId){
 }
 // ---- Cửa sổ tạo/sửa bảng tiến độ ---------------------------------------------
 async function openProgressPlan(projectId,planId=''){
- if(!canEditProject())return alert('Tài khoản hiện tại không có quyền sửa bảng tiến độ.');
+ if(!canEditProject(currentProjectId))return alert('Chỉ người phụ trách tại công trình, Giám đốc hoặc Admin được sửa bảng tiến độ.');
  if(!apiOnline())return alert('Cần kết nối mạng để tạo/sửa bảng tiến độ.');
  const p=db.projects.find(x=>x.id===projectId);if(!p)return;
  let plan={plan_name:'Bảng tiến độ thi công',report_date:todayIso(),weight_basis:'VALUE',original_end_date:p.endDate||''},items=[];

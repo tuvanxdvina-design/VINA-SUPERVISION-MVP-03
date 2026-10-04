@@ -6,7 +6,7 @@ const { lastReviewSql } = require('./reviewService');
 const TYPE_CODES = { HS: 'Hồ sơ pháp lý', BB: 'Biên bản', NK: 'Nhật ký', TK: 'Thiết kế kỹ thuật', BC: 'Báo cáo', TKT: 'Tiêu chuẩn kỹ thuật', KHAC: 'Khác' };
 
 const LIST_SQL = `
-  SELECT d.id, d.project_id, d.type, d.auto_code, d.name, d.status, d.version, d.doc_group, d.details,
+  SELECT d.id, d.project_id, d.type, d.auto_code, d.name, d.status, d.version, d.row_version, d.doc_group, d.details,
          d.is_adjustment_of, d.created_by, d.created_at, d.updated_at, d.approved_at, d.locked_at, d.submitted_at,
          ${lastReviewSql('documents', 'd')} AS last_review,
          COALESCE(d.author_name, u.full_name) AS created_by_name, up.full_name AS updated_by_name, a.full_name AS approved_by_name,
@@ -73,13 +73,14 @@ class DocumentService {
     const cur = await this.getDocumentById(id);
     if (!cur) return null;
     const type = data.type && TYPE_CODES[data.type] ? data.type : cur.type;
-    await pool.query(`
-      UPDATE documents SET name = COALESCE(NULLIF($1, ''), name), doc_group = $2, details = $3::jsonb,
-        updated_by = $4, updated_at = NOW()
-      WHERE id = $5`,
-    [data.name || '', data.doc_group === 'REPORT' || data.doc_group === 'LEGAL' ? data.doc_group : cur.doc_group,
-      JSON.stringify(data.details !== undefined ? data.details : cur.details || {}), actorId, id]);
-    if (type !== cur.type) await pool.query('UPDATE documents SET type = $1 WHERE id = $2', [type, id]);
+    const result = await pool.query(`
+      UPDATE documents SET name = COALESCE(NULLIF($1, ''), name), type = $2, doc_group = $3, details = $4::jsonb,
+        updated_by = $5, row_version = row_version + 1, updated_at = NOW()
+      WHERE id = $6 AND ($7::integer IS NULL OR row_version = $7)
+      RETURNING id`,
+    [data.name || '', type, data.doc_group === 'REPORT' || data.doc_group === 'LEGAL' ? data.doc_group : cur.doc_group,
+      JSON.stringify(data.details !== undefined ? data.details : cur.details || {}), actorId, id, data.expected_row_version ?? null]);
+    if (!result.rows[0]) return null;
     return this.getDocumentById(id);
   }
 
@@ -91,7 +92,7 @@ class DocumentService {
       ON CONFLICT (document_id, sha256) DO UPDATE SET category = EXCLUDED.category, file_name = EXCLUDED.file_name
       RETURNING id, category, file_name, file_type, file_size, uploaded_at, (xmax = 0) AS created`,
     [documentId, category || 'Tài liệu', name, type || 'application/octet-stream', buffer.length, sha256, buffer, actorId]);
-    await pool.query('UPDATE documents SET updated_by = $1, updated_at = NOW() WHERE id = $2', [actorId, documentId]);
+    if (r.rows[0]) await pool.query('UPDATE documents SET updated_by = $1, row_version = row_version + 1, updated_at = NOW() WHERE id = $2', [actorId, documentId]);
     return r.rows[0];
   }
 
@@ -101,34 +102,34 @@ class DocumentService {
 
   async removeFile(documentId, fileId, actorId) {
     const r = await pool.query('DELETE FROM document_files WHERE id = $1 AND document_id = $2 RETURNING id, file_name', [fileId, documentId]);
-    if (r.rows[0]) await pool.query('UPDATE documents SET updated_by = $1, updated_at = NOW() WHERE id = $2', [actorId, documentId]);
+    if (r.rows[0]) await pool.query('UPDATE documents SET updated_by = $1, row_version = row_version + 1, updated_at = NOW() WHERE id = $2', [actorId, documentId]);
     return r.rows[0];
   }
 
   // ---- Quy trình (giữ như trước) ----
   async submitDocument(id, userId) {
-    const r = await pool.query(`UPDATE documents SET status = 'SUBMITTED', submitted_by = $1, submitted_at = NOW(), updated_at = NOW()
+    const r = await pool.query(`UPDATE documents SET status = 'SUBMITTED', submitted_by = $1, submitted_at = NOW(), row_version = row_version + 1, updated_at = NOW()
       WHERE id = $2 AND status = 'DRAFT' RETURNING *`, [userId, id]);
     return r.rows[0];
   }
   async approveDocument(id, userId) {
-    const r = await pool.query(`UPDATE documents SET status = 'APPROVED', approved_by = $1, approved_at = NOW(), updated_at = NOW()
+    const r = await pool.query(`UPDATE documents SET status = 'APPROVED', approved_by = $1, approved_at = NOW(), row_version = row_version + 1, updated_at = NOW()
       WHERE id = $2 AND status = 'SUBMITTED' RETURNING *`, [userId, id]);
     return r.rows[0];
   }
   async rejectDocument(id) {
-    const r = await pool.query(`UPDATE documents SET status = 'DRAFT', submitted_at = NULL, updated_at = NOW()
+    const r = await pool.query(`UPDATE documents SET status = 'DRAFT', submitted_at = NULL, row_version = row_version + 1, updated_at = NOW()
       WHERE id = $1 AND status = 'SUBMITTED' RETURNING *`, [id]);
     return r.rows[0];
   }
   async lockDocument(id) {
-    const r = await pool.query(`UPDATE documents SET status = 'LOCKED', locked_at = NOW(), updated_at = NOW()
+    const r = await pool.query(`UPDATE documents SET status = 'LOCKED', locked_at = NOW(), row_version = row_version + 1, updated_at = NOW()
       WHERE id = $1 AND status = 'APPROVED' RETURNING *`, [id]);
     return r.rows[0];
   }
   async reopenDocument(id, userId, reason) {
     const r = await pool.query(`UPDATE documents SET status = 'DRAFT', reopened_by = $1, reopened_at = NOW(), reopened_reason = $2,
-      version = version + 1, updated_at = NOW() WHERE id = $3 AND status = 'LOCKED' RETURNING *`, [userId, reason || null, id]);
+      version = version + 1, row_version = row_version + 1, updated_at = NOW() WHERE id = $3 AND status = 'LOCKED' RETURNING *`, [userId, reason || null, id]);
     return r.rows[0];
   }
   async deleteDocument(id) {

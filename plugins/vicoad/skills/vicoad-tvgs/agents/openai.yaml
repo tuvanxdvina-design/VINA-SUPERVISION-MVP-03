@@ -1,0 +1,6 @@
+interface:
+  display_name: "VICOAD — Nghiệp vụ TVGS"
+  short_description: "Nghiệp vụ TVGS cho phần mềm quản lý TVGS"
+  default_prompt: "Dùng $vicoad-tvgs để xử lý yêu cầu hiện tại của dự án TVGS."
+policy:
+  allow_implicit_invocation: true

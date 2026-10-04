@@ -15,7 +15,9 @@ if errorlevel 1 (
   endlocal
   exit /b 2
 )
-set UI_TEST_DB_URL=postgres://postgres:postgres@127.0.0.1:5432/%DB%
+set UI_TEST_DB_URL=postgres://postgres:postgres@127.0.0.1:5433/%DB%
+for /f "delims=" %%I in ('docker compose -f "%~dp0..\..\docker-compose.yml" ps -q postgres') do set DB_CONTAINER=%%I
+if "%DB_CONTAINER%"=="" exit /b 3
 cd /d %~dp0..
 set OUT=%~dp0..\tests\last-ui-test.txt
 set PAT=%~2
@@ -26,6 +28,6 @@ if "%PAT%"=="" (
   node --test --test-reporter=spec --test-name-pattern "%PAT%" tests/ui/all.test.js >> "%OUT%" 2>&1
 )
 echo EXIT %ERRORLEVEL%>> "%OUT%"
-docker exec vina-supervision-db psql -U postgres -d postgres -qc "drop database if exists %DB%" >nul 2>&1
+docker exec %DB_CONTAINER% psql -U postgres -d postgres -qc "drop database if exists %DB%" >nul 2>&1
 echo DONE>> "%OUT%"
 endlocal

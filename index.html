@@ -3,17 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VINA-SUPERVISION MVP-02</title>
+<title>VINA-SUPERVISION</title>
 <meta name="theme-color" content="#0f172a">
+<meta name="application-name" content="VINA-SUPERVISION">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VINA">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="./assets/app-icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./assets/app-icon-180.png">
 <style>
 :root{--bg:#f5f7fb;--card:#fff;--text:#172033;--muted:#667085;--line:#e4e7ec;--pri:#155eef;--ok:#039855;--warn:#dc6803;--danger:#d92d20}
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
 header{height:60px;background:#0f172a;color:#fff;display:flex;align-items:center;padding:0 18px;gap:18px;position:sticky;top:0;z-index:10}
-header b{font-size:18px}.status{margin-left:auto;font-size:12px;padding:6px 10px;border-radius:99px;background:#344054}
+header b{font-size:18px}.session-identity{margin-left:auto;min-width:0;display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}.session-identity strong{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.session-identity small{color:#d0d5dd;font-size:11px}.status{font-size:12px;padding:6px 10px;border-radius:99px;background:#344054;white-space:nowrap}
 .logout-button{color:#fff;border-color:#667085;background:#1d2939;white-space:nowrap}
 .layout{display:flex;min-height:calc(100vh - 60px)}aside{width:240px;background:#fff;border-right:1px solid var(--line);padding:12px;position:sticky;top:60px;height:calc(100vh - 60px)}
-nav button{width:100%;text-align:left;border:0;background:transparent;padding:11px 12px;border-radius:8px;margin:2px 0;cursor:pointer;color:var(--text)}
+nav button{width:100%;display:flex;align-items:center;gap:10px;text-align:left;border:0;background:transparent;padding:11px 12px;border-radius:8px;margin:2px 0;cursor:pointer;color:var(--text)}
 nav button.active,nav button:hover{background:#eef4ff;color:var(--pri)}
+.nav-icon{width:24px;flex:0 0 24px;text-align:center;font-family:"Segoe UI Emoji","Segoe UI Symbol",sans-serif;font-size:18px;line-height:1}
+.nav-label{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.nav-section-label{padding:14px 12px 5px;color:#667085;font-size:11px;font-weight:700;text-transform:uppercase}
+.nav-section-label:first-child{padding-top:4px}.mobile-more{display:none}
+.mobile-more-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.mobile-more-grid button{display:flex;align-items:center;gap:10px;min-height:54px;text-align:left}
 main{flex:1;padding:22px;max-width:1500px;margin:auto;width:100%}
 .page{display:none}.page.active{display:block}.grid{display:grid;gap:14px}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 1px 2px #1018280d}
@@ -35,14 +48,20 @@ table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px s
 .detail-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0}
 .detail-meta .item{background:#f9fafb;border:1px solid var(--line);border-radius:8px;padding:10px}
 .detail-meta .item b{display:block;font-size:12px;color:var(--muted);font-weight:600}
-@media(max-width:900px){aside{width:72px}aside span{display:none}.g4,.g3{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){aside{display:none}main{padding:12px}.g4,.g3,.row{grid-template-columns:1fr}.personnel-change-row{grid-template-columns:1fr!important}header{height:54px}}
+@media(max-width:900px){.g4,.g3{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:601px) and (max-width:900px){aside{width:190px;padding:8px}nav button{padding:10px 8px;gap:8px}.nav-label{display:inline;font-size:13px}main{padding:16px}}
+@media(max-width:600px){main{padding:12px}.g4,.g3,.row{grid-template-columns:1fr}.personnel-change-row,.log-resource-row{grid-template-columns:1fr!important}header{height:54px}}
 @media(max-width:600px){
-  header{padding:0 12px;gap:8px}header b{font-size:15px}header .muted{display:none}
+  header{padding:0 8px;gap:6px}header b{font-size:13px;line-height:1.1;max-width:78px;overflow-wrap:anywhere}header .muted{display:none}
+  .session-identity{max-width:112px}.session-identity strong{max-width:112px;font-size:11px}.session-identity small{max-width:112px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px}
+  header .status{font-size:10px;padding:5px 7px}header .logout-button{font-size:11px;padding:7px 8px;min-height:36px}
   .layout{display:block;min-height:calc(100dvh - 54px)}
   aside{display:block;position:fixed;top:auto;bottom:0;left:0;right:0;width:100%;height:auto;z-index:20;padding:4px 6px calc(4px + env(safe-area-inset-bottom));border-right:0;border-top:1px solid var(--line);box-shadow:0 -2px 12px #10182818}
   nav{display:flex;gap:4px;overflow-x:auto;scrollbar-width:thin}
-  nav button{display:flex;align-items:center;justify-content:center;gap:4px;flex:0 0 auto;width:auto;min-height:44px;white-space:nowrap;margin:0;padding:8px 10px;font-size:12px}
-  aside span{display:inline}
+  nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;flex:1 1 0;width:auto;min-width:64px;min-height:54px;white-space:nowrap;margin:0;padding:5px 4px;font-size:11px}
+  .nav-icon{width:auto;flex:0 0 auto;font-size:19px}.nav-label{display:block;width:100%;text-align:center;overflow:hidden;text-overflow:ellipsis}
+  .nav-badge{position:absolute;margin:-30px 0 0 28px}
+  .nav-section-label,nav button.nav-overflow{display:none}.mobile-more{display:flex}
   main{padding:12px 12px calc(82px + env(safe-area-inset-bottom));max-width:100%;min-width:0}
   .card{padding:12px;min-width:0}table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
   th,td{min-width:90px}button,.btn{min-height:44px}input,select,textarea{font-size:16px;min-height:44px}
@@ -116,7 +135,7 @@ table.rp{margin:4px 0 10px}table.rp th,table.rp td{border:1px solid var(--line);
 <body>
 
 <div id="loginScreen" class="login-screen">
-  <div class="login-card">
+  <form class="login-card" onsubmit="event.preventDefault();vinaDoLogin()">
     <h2>VINA-SUPERVISION</h2>
     <p class="muted">Đăng nhập hệ thống quản lý TVGS</p>
 
@@ -127,27 +146,29 @@ table.rp{margin:4px 0 10px}table.rp th,table.rp td{border:1px solid var(--line);
     <input id="loginPassword" type="password"
            autocomplete="current-password">
 
-    <button id="loginButton" class="primary" type="button"
-            onclick="vinaDoLogin()">Đăng nhập</button>
+    <button id="loginButton" class="primary" type="submit">Đăng nhập</button>
 
     <div id="loginError" class="login-error"></div>
-  </div>
+  </form>
 </div>
 
-<header><b>VINA-SUPERVISION</b><span class="muted" style="color:#d0d5dd">MVP-02</span><span id="net" class="status">Đang kiểm tra...</span><button class="logout-button" type="button" onclick="openChangePassword()">Đổi mật khẩu</button><button id="logoutButton" class="logout-button" type="button" onclick="vinaLogout()">Đăng xuất</button></header>
+<header><b>VINA-SUPERVISION</b><span class="muted" style="color:#d0d5dd">MVP-03</span><span id="sessionIdentity" class="session-identity" aria-live="polite"></span><span id="net" class="status">Đang kiểm tra...</span><button id="logoutButton" class="logout-button" type="button" onclick="vinaLogout()">Đăng xuất</button></header>
 <div class="layout">
 <aside><nav>
-<button class="active" data-page="dashboard">▦ <span>Tổng quan</span><b id="alertBadge" class="nav-badge"></b></button>
-<button data-page="inbox" style="display:none">✉ <span>Việc cần duyệt</span><b id="inboxBadge" class="nav-badge"></b></button>
-<button data-page="projects">▣ <span>Công trình</span></button>
-<button data-page="daily">☑ <span>Nhật ký</span></button>
-<button data-page="issues">⚠ <span>Vấn đề</span></button>
-<button data-page="docs">▤ <span>Hồ sơ</span></button>
-<button data-page="reports">▥ <span>Báo cáo</span></button>
-<button data-page="people">♙ <span>Nhân sự</span></button>
-<button data-page="audit">◴ <span>Audit Log</span></button>
-<button data-page="trash" style="display:none">🗑 <span>Thùng rác</span></button>
-<button data-page="settings">⚙ <span>Thiết lập</span></button>
+<div class="nav-section-label">Công việc</div>
+<button class="active nav-primary" data-page="dashboard"><span class="nav-icon" aria-hidden="true">🏠</span><span class="nav-label">Tổng quan</span><b id="alertBadge" class="nav-badge"></b></button>
+<button class="nav-primary" data-page="projects"><span class="nav-icon" aria-hidden="true">🏗</span><span class="nav-label">Công trình</span></button>
+<button class="nav-primary" data-page="daily"><span class="nav-icon" aria-hidden="true">📝</span><span class="nav-label">Báo cáo ngày</span></button>
+<button class="nav-overflow" data-page="issues"><span class="nav-icon" aria-hidden="true">⚠</span><span class="nav-label">Chất lượng</span></button>
+<button class="nav-overflow" data-page="reports"><span class="nav-icon" aria-hidden="true">📊</span><span class="nav-label">Báo cáo</span></button>
+<div class="nav-section-label">Điều hành</div>
+<button class="nav-primary" data-page="inbox" style="display:none"><span class="nav-icon" aria-hidden="true">📥</span><span class="nav-label">Cần duyệt</span><b id="inboxBadge" class="nav-badge"></b></button>
+<button class="nav-overflow" data-page="people"><span class="nav-icon" aria-hidden="true">👥</span><span class="nav-label">Nhân sự</span></button>
+<div class="nav-section-label">Hệ thống</div>
+<button class="nav-overflow" data-page="audit"><span class="nav-icon" aria-hidden="true">🕘</span><span class="nav-label">Lịch sử</span></button>
+<button class="nav-overflow" data-page="trash" style="display:none"><span class="nav-icon" aria-hidden="true">🗑</span><span class="nav-label">Thùng rác</span></button>
+<button class="nav-overflow" data-page="settings"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Thiết lập</span></button>
+<button id="mobileMoreButton" class="mobile-more" type="button" onclick="openMobileMenu()"><span class="nav-icon" aria-hidden="true">•••</span><span class="nav-label">Thêm</span></button>
 </nav></aside>
 <main>
 <section id="dashboard" class="page active">
@@ -157,7 +178,7 @@ table.rp{margin:4px 0 10px}table.rp th,table.rp td{border:1px solid var(--line);
 <details style="margin-top:14px"><summary class="muted">Thống kê dữ liệu trên thiết bị này</summary>
 <div class="grid g4">
 <div class="card"><div class="muted">Công trình</div><div id="kProjects" class="kpi">0</div></div>
-<div class="card"><div class="muted">Nhật ký</div><div id="kLogs" class="kpi">0</div></div>
+<div class="card"><div class="muted">Báo cáo ngày</div><div id="kLogs" class="kpi">0</div></div>
 <div class="card"><div class="muted">Vấn đề mở</div><div id="kIssues" class="kpi">0</div></div>
 <div class="card"><div class="muted">Hồ sơ chính thức</div><div id="kDocs" class="kpi">0</div></div>
 </div>
@@ -188,9 +209,9 @@ table.rp{margin:4px 0 10px}table.rp th,table.rp td{border:1px solid var(--line);
 </div>
 <div class="card" style="margin-top:14px"><div id="pdProgress"></div></div>
 <div class="grid g3" style="margin-top:14px">
-<div class="card"><h3>Nhật ký <button onclick="openProjectSection('daily')">Mở</button></h3><div id="pdLogs"></div></div>
+<div class="card"><h3>Báo cáo ngày <button onclick="openProjectSection('daily')">Mở</button></h3><div id="pdLogs"></div></div>
 <div class="card"><h3>Chất lượng công trình <button onclick="openProjectSection('issues')">Mở</button></h3><div id="pdIssues"></div></div>
-<div class="card"><h3>Hồ sơ <button onclick="openProjectSection('docs')">Mở</button></h3><div id="pdDocs"></div></div>
+<div class="card"><div class="detail-header"><h3 style="margin:0">Hồ sơ công trình</h3><div class="toolbar" style="margin:0"><button id="pdNewDocBtn" class="primary" onclick="openProjectDoc()">+ Khai báo hồ sơ</button><button onclick="openProjectSection('docs')">Xem tất cả</button></div></div><div id="pdDocs"></div></div>
 </div>
 <div class="card" style="margin-top:14px"><h3>Nhân sự được phân công <button onclick="openProjectSection('people')">Mở</button></h3><div id="pdPeople"></div></div>
 </section>
@@ -198,7 +219,7 @@ table.rp{margin:4px 0 10px}table.rp th,table.rp td{border:1px solid var(--line);
 <section id="inbox" class="page">
 <h2>Việc cần duyệt</h2>
 <p class="muted">Trưởng TVGS quyết định mọi việc của đoàn TVGS tại công trình mình phụ trách: phê duyệt hoặc yêu cầu chỉnh sửa, bổ sung. Việc vượt thẩm quyền thì bấm <b>Trình công ty</b> để Giám đốc quyết định. Quyền duyệt tính theo từng công trình (chức danh "TVGS trưởng" tại công trình đó).</p>
-<div class="toolbar"><button onclick="loadInbox(true)">↻ Tải lại</button></div>
+<div class="toolbar"><button onclick="refreshInbox(this)">↻ Tải lại</button><span id="inboxRefreshState" class="muted"></span></div>
 <div id="inboxBody"><p class="muted">Đang tải...</p></div>
 </section>
 
@@ -216,21 +237,21 @@ table.rp{margin:4px 0 10px}table.rp th,table.rp td{border:1px solid var(--line);
 </section>
 
 <section id="daily" class="page">
-<h2>Nhật ký hiện trường</h2>
-<div class="toolbar"><button id="newLogButton" class="primary" onclick="openLog()">+ Lập nhật ký</button><select id="logProject" onchange="renderLogs()"></select></div>
-<div class="card"><div class="notice">Mất mạng vẫn lập được nhật ký: dữ liệu lưu tạm trên thiết bị và tự đưa lên máy chủ khi có mạng. Tiến độ cập nhật ở Chi tiết công trình → Tiến độ thi công.</div><div id="logsTable" style="margin-top:12px"></div></div>
+<h2>Báo cáo ngày cá nhân</h2>
+<div class="toolbar"><button id="newLogButton" class="primary" onclick="openLog()">+ Lập báo cáo ngày</button><select id="logProject" onchange="renderLogs()"></select><select id="logAuthor" onchange="renderLogs()"><option value="">Tất cả người lập</option></select><span id="logContextRole" class="chip" style="display:none"></span></div>
+<div class="card"><div class="notice">Mỗi giám sát viên lập báo cáo phần việc của mình. Mất mạng vẫn lưu tạm trên thiết bị và tự đưa lên máy chủ khi có mạng; báo cáo đã gửi vẫn nằm trong danh sách với trạng thái Chờ duyệt.</div><div id="logsTable" style="margin-top:12px"></div></div>
 </section>
 
 <section id="issues" class="page">
 <h2>Chất lượng công trình</h2>
-<div class="toolbar"><button class="primary" onclick="openIssue()">+ Ghi nội dung chất lượng</button><select id="issueProject" onchange="renderIssues()"></select></div>
+<div class="toolbar"><button id="newIssueButton" class="primary" onclick="openIssue()">+ Ghi nội dung chất lượng</button><select id="issueProject" onchange="renderIssues()"></select></div>
 <div class="card"><div id="issuesTable"></div></div>
 </section>
 
 <section id="docs" class="page">
-<h2>Hồ sơ pháp lý</h2>
+<div class="detail-header"><div><h2>Hồ sơ công trình</h2><p id="docProjectContext" class="muted">Khai báo, cập nhật và quản lý hồ sơ của công trình đang chọn.</p></div><button onclick="returnToCurrentProject()">← Chi tiết công trình</button></div>
 <div class="notice">Hồ sơ được tải từ máy chủ và lưu tạm trên thiết bị để xem khi mất mạng.</div>
-<div class="toolbar"><button class="primary" onclick="openDoc()">+ Tạo hồ sơ</button><select id="docGroup" onchange="renderDocs()"><option value="LEGAL">Hồ sơ pháp lý</option><option value="REPORT">Báo cáo (xem ở mục Báo cáo)</option><option value="">Tất cả nhóm</option></select><select id="docProject" onchange="renderDocs()"></select></div>
+<div class="toolbar"><button class="primary" onclick="openProjectDoc()">+ Khai báo hồ sơ</button><select id="docGroup" onchange="renderDocs()"><option value="LEGAL">Hồ sơ pháp lý</option><option value="REPORT">Báo cáo (xem ở mục Báo cáo)</option><option value="">Tất cả nhóm</option></select><select id="docProject" onchange="renderDocs()"></select></div>
 <div class="card"><div id="docsTable"></div></div>
 </section>
 
@@ -244,7 +265,7 @@ table.rp{margin:4px 0 10px}table.rp th,table.rp td{border:1px solid var(--line);
 <section id="people" class="page">
 <h2>Nhân sự & phân công</h2>
 <div class="notice">Mỗi nhân sự chỉ hiển thị một lần theo từng công trình. Chức danh là công việc được giao. Bấm vào một nhân sự để chọn <b>quyền truy cập</b> (Xem / Thêm / Sửa / Tải xuống) hoặc liên kết tài khoản đăng nhập.</div>
-<div class="toolbar"><label for="directoryProject" style="margin:0">Công trình</label><select id="directoryProject" style="max-width:420px" onchange="loadProjectTeamDirectory(this.value)"></select><button id="addPersonButton" class="primary" onclick="openPerson()">+ Thêm nhân sự</button></div>
+<div class="toolbar"><label for="directoryProject" style="margin:0">Công trình</label><select id="directoryProject" style="max-width:420px" onchange="loadProjectTeamDirectory(this.value)"></select><span id="peopleContextRole" class="chip" style="display:none"></span><button id="addPersonButton" class="primary" onclick="openPerson()">+ Thêm nhân sự</button></div>
 <div class="card"><div id="projectTeamDirectory"></div></div>
 </section>
 
@@ -273,7 +294,8 @@ table.rp{margin:4px 0 10px}table.rp th,table.rp td{border:1px solid var(--line);
 </div>
 <div class="grid g3">
 <div class="card"><h3>Vai trò hiện tại</h3><select id="role" disabled><option>Giám đốc</option><option>Admin</option><option>TVGS trưởng</option><option>GS viên</option><option>Văn phòng</option><option>Chủ đầu tư</option></select><p class="muted">Vai trò được cấp theo tài khoản đăng nhập.</p></div>
-<div class="card"><h3>Phiên làm việc</h3><p class="muted">Nút Đăng xuất luôn có sẵn ở đầu trang.</p></div>
+<div class="card"><h3>Tài khoản và phiên làm việc</h3><button type="button" onclick="openChangePassword()">Đổi mật khẩu</button><p class="muted">Đăng xuất bằng nút ở đầu trang khi kết thúc làm việc.</p></div>
+<div class="card"><h3>Ứng dụng trên thiết bị</h3><button id="installAppButton" class="primary" type="button" onclick="installVinaApp()">Cài ứng dụng</button><p id="installAppStatus" class="muted"></p></div>
 <div class="card"><h3>Dữ liệu</h3><button onclick="exportJSON()">Xuất JSON</button> <button onclick="clearAll()" class="danger">Xóa dữ liệu cục bộ</button></div>
 <div class="card"><h3>Quy tắc hồ sơ</h3><p>Không sửa đè hồ sơ đã khóa. Mở khóa phải tạo phiên bản mới và ghi Audit Log.</p></div>
 </div>
@@ -281,6 +303,7 @@ table.rp{margin:4px 0 10px}table.rp th,table.rp td{border:1px solid var(--line);
 </main></div>
 
 <div id="modal" class="modal"><div class="modalbox"><div style="display:flex;justify-content:space-between;align-items:center"><h3 id="mtitle"></h3><button onclick="closeModal()">✕</button></div><div id="mbody"></div></div></div>
+<script src="./js/00-tep-ngoai-tuyen.js"></script>
 <script src="./js/01-core.js"></script>
 <script src="./js/02-quyen.js"></script>
 <script src="./js/03-cong-trinh.js"></script>
@@ -298,11 +321,12 @@ table.rp{margin:4px 0 10px}table.rp th,table.rp td{border:1px solid var(--line);
 <script src="./js/glue-1-core.js"></script>
 <script src="./api.js"></script>
 <script src="./js/00-khoi-dong.js"></script>
-<script src="./js/02-glue-sau-api.js"></script>
+<script src="./js/02-glue-sau-api.js?v=20261014-v52"></script>
 <script src="./js/03-font-fix.js"></script>
 <script src="./js/glue-4-tinh-nang-2.js"></script>
 <script src="./js/05-glue-cuoi.js"></script>
 <script src="./js/glue-6-tinh-nang-3.js"></script>
+<script src="./js/15-cai-dat-ung-dung.js"></script>
 
 </body>
 </html>

@@ -1,13 +1,13 @@
 let currentProjectId=null;
 function mergeProjectsFromServer(remoteProjects){
   const localQueue=db.sync.filter(x=>x.type==='project' && (x.status==='PENDING'||x.status==='CONFLICT'));
-  const pendingIds=new Set(localQueue.filter(x=>x.status==='PENDING').map(x=>x.recordId));
+  const protectedIds=new Set(localQueue.map(x=>x.recordId));
   const queuedIds=new Set(localQueue.map(x=>x.recordId));
   const localById=new Map(db.projects.map(p=>[p.id,p]));
   const remoteById=new Map();remoteProjects.forEach(p=>{if(p&&p.id&&!remoteById.has(p.id))remoteById.set(p.id,p)});
   const conflicts=new Map(localQueue.filter(x=>x.status==='CONFLICT').map(x=>[x.recordId,x.lastError||'Bị máy chủ từ chối']));
   db.projects=[
-    ...[...remoteById.values()].map(p=>pendingIds.has(p.id)?{...(localById.get(p.id)||p),_localOnly:false}:p),
+    ...[...remoteById.values()].map(p=>protectedIds.has(p.id)?{...(localById.get(p.id)||p),_localOnly:false,_syncError:conflicts.get(p.id)||''}:p),
     // Công trình tạo trên thiết bị nhưng chưa có trên máy chủ: giữ lại để không mất dữ liệu, gắn cờ để không đưa vào phân công.
     ...db.projects.filter(p=>queuedIds.has(p.id)&&!remoteById.has(p.id)).map(p=>({...p,_localOnly:true,_syncError:conflicts.get(p.id)||''}))
   ];
@@ -38,17 +38,35 @@ function openProjectSection(page){
   
   renderAll();
 }
+function openProjectDoc(docId=''){
+  if(currentProjectId){const el=document.getElementById('docProject');if(el)el.value=currentProjectId}
+  openDoc(docId);
+}
+function returnToCurrentProject(){
+  if(!currentProjectId)return goProjects();
+  goPage('projectDetail');renderProjectDetail();
+}
 function openProjectDetail(pid){currentProjectId=pid;goPage('projectDetail');renderProjectDetail();void syncDocumentsFromApi();void loadProjectDetailMembers(pid);void loadProjectProgressPlans(pid);if(typeof loadProjectHealth==='function')void loadProjectHealth(pid)}
 function projectRows(arr,forDash=false){
-return `<table><thead><tr><th>M&#x00e3;</th><th>C&#x00f4;ng tr&#x00ec;nh</th><th>&#x110;&#x1ecb;a b&#x00e0;n</th><th>H&#x1ee3;p &#x0111;&#x1ed3;ng</th><th>Ti&#x1ebfn &#x0111;&#x1ed9;</th><th>Tr&#x1ea1;ng th&#x00e1;i</th><th></th></tr></thead><tbody>${arr.map(p=>`<tr class="${forDash?'clickable':''}" ${forDash?`onclick="openProjectDetail('${p.id}')"`:''}><td>${esc(p.code)}</td><td><b>${esc(p.name)}</b>${p._localOnly?` <span class="chip warn" title="${esc(p._syncError||'')}">${p._syncError?'Máy chủ từ chối: '+esc(p._syncError):'Chưa đồng bộ'}</span>`:''}<br><span class="muted">${esc(p.client||'')}</span></td><td>${esc(p.province||'')}</td><td>${p.contractNo?esc(p.contractNo):'<span class="muted">—</span>'}${p.contractValue?`<br><span class="muted">${Number(p.contractValue).toLocaleString('vi-VN')} &#x0111;</span>`:''}</td><td>${p.progress||0}%</td><td>${statusBadge(p.status)}</td><td>${forDash?`<button onclick="event.stopPropagation();openProjectDetail('${p.id}')">Xem</button>`:`${canEditProject()?`<button onclick="openProject('${p.id}')">S&#x1eed;a</button> `:''}<button onclick="openProjectDetail('${p.id}')">Chi ti&#x1ebft</button>`}</td></tr>`).join('')}</tbody></table>`}
-function renderProjects(){let q=(document.getElementById('projectSearch')?.value||'').toLowerCase();document.getElementById('projectsTable').innerHTML=projectRows(db.projects.filter(p=>(p.name+p.code+(p.province||'')+(p.contractNo||'')).toLowerCase().includes(q)))||'<p class="muted">Chưa có công trình.</p>'}
+ const rows=arr.map(p=>`<tr class="${forDash?'clickable':''}" ${forDash?`onclick="openProjectDetail('${p.id}')"`:''}>
+  <td>${esc(p.code)}</td>
+  <td><b>${esc(p.name)}</b>${p._syncError?` <span class="chip danger" title="${esc(p._syncError)}">Cần đối chiếu</span>`:(p._localOnly?' <span class="chip warn">Chưa đồng bộ</span>':'')}<br><span class="muted">${esc(p.client||'')}</span></td>
+  <td>${esc(p.province||'')}</td>
+  <td>${p.contractNo?esc(p.contractNo):'<span class="muted">—</span>'}${p.contractValue?`<br><span class="muted">${Number(p.contractValue).toLocaleString('vi-VN')} &#x0111;</span>`:''}</td>
+  <td>${p.progress||0}%</td><td>${statusBadge(p.status)}</td>
+  <td>${forDash?`<button onclick="event.stopPropagation();openProjectDetail('${p.id}')">Xem</button>`:`${canEditProject(p.id)?`<button onclick="openProject('${p.id}')">S&#x1eed;a</button> `:''}<button onclick="openProjectDetail('${p.id}')">Chi ti&#x1ebft</button>`}</td>
+ </tr>`).join('');
+ return `<table><thead><tr><th>Mã</th><th>Công trình</th><th>Địa bàn</th><th>Hợp đồng</th><th>Tiến độ</th><th>Trạng thái</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+}
+function renderProjects(){let q=(document.getElementById('projectSearch')?.value||'').toLowerCase();const add=document.getElementById('newProjectButton');if(add)add.style.display=canManageAssignments()?'':'none';document.getElementById('projectsTable').innerHTML=projectRows(db.projects.filter(p=>(p.name+p.code+(p.province||'')+(p.contractNo||'')).toLowerCase().includes(q)))||'<p class="muted">Chưa có công trình.</p>'}
 async function refreshProjectFromServer(projectId){try{const projects=await apiGetProjects();mergeProjectsFromServer(projects);save()}catch(_){}}
 
 function renderProjectDetail(){
 if(!currentProjectId)return;
 const p=db.projects.find(x=>x.id===currentProjectId);
 if(!p){goDashboard();return}
-document.getElementById('pdEditBtn').style.display=canEditProject()?'':'none';
+document.getElementById('pdEditBtn').style.display=canEditProject(p.id)?'':'none';
+document.getElementById('pdNewDocBtn').style.display=canCreateDocIn(p.id)?'':'none';
 document.getElementById('pdTitle').textContent=`${p.code} — ${p.name}`;
 document.getElementById('pdSub').textContent=`${p.client||''} · ${p.province||''} · Tiến độ ${p.progress||0}%`;
 document.getElementById('pdMeta').innerHTML=`
@@ -58,8 +76,9 @@ document.getElementById('pdMeta').innerHTML=`
 <div class="item"><b>&#x0110;&#x1ecb;a b&#x00e0;n</b>${esc(p.province||'—')}</div>
 <div class="item"><b>Ti&#x1ebfn &#x0111;&#x1ed9;</b>${p.progress||0}%</div>
 <div class="item"><b>Ng&#x00e0;y t&#x1ea1;o</b>${fmt(p.createdAt)}</div>`;
-const tvgsLink=p.contractFileTvgs?.data?`<p><a href="${p.contractFileTvgs.data}" download="${esc(p.contractFileTvgs.name||'hop-dong-tvgs')}">Tải hợp đồng TVGS: ${esc(p.contractFileTvgs.name||'Tệp hợp đồng')}</a></p>`:'';
-const contractorLink=p.contractFileContractor?.data?`<p><a href="${p.contractFileContractor.data}" download="${esc(p.contractFileContractor.name||'hop-dong-nha-thau')}">Tải hợp đồng nhà thầu: ${esc(p.contractFileContractor.name||'Tệp hợp đồng')}</a></p>`:'';
+const projectFileLink=(category,label)=>{const f=(p.files||[]).filter(x=>x.category===category).slice(-1)[0];return f?`<p><a href="#" onclick="openServerFile('/projects/${p.id}/files/${f.id}',${esc(JSON.stringify({name:f.name,type:f.type}))},false);return false">${label}: ${esc(f.name)}</a> <span class="muted">(${fileSize(f.size)})</span></p>`:''};
+const tvgsLink=projectFileLink('TVGS_CONTRACT','Hợp đồng TVGS');
+const contractorLink=projectFileLink('CONTRACTOR_CONTRACT','Hợp đồng nhà thầu');
 document.getElementById('pdContract').innerHTML=`
 <h4 style="margin:8px 0 6px">Thông tin hợp đồng</h4>
 <h5>Tư vấn giám sát</h5><div class="detail-meta">
@@ -70,41 +89,58 @@ ${p.contractorContractContent?`<p><b>Nội dung</b><br>${esc(p.contractorContrac
 renderProjectProgress(p);
 const logs=db.logs.filter(x=>x.projectId===p.id);
 const issues=db.issues.filter(x=>x.projectId===p.id);
-const docs=db.docs.filter(x=>x.projectId===p.id);
+const docs=db.docs.filter(x=>x.projectId===p.id&&docGroup(x)==='LEGAL');
 
 document.getElementById('pdLogs').innerHTML=logs.length?`<table><thead><tr><th>Ngày</th><th>Công việc</th><th>NL</th><th>Máy</th><th>Trạng thái</th><th></th></tr></thead><tbody>${logs.map(x=>`<tr><td>${esc(x.date)}<br><span class="muted">${esc(shiftLabel(x.shift))}</span></td><td>${esc(x.work)}</td><td>${x.workers}</td><td>${x.machines}</td><td>${logStatusBadge(x.status)}</td><td>${canEditLog(x)?`<button onclick="openLog('${x.id}')">Sửa</button>`:'<span class="muted">Chỉ xem</span>'}</td></tr>`).join('')}</tbody></table>`:'<span class="muted">Chưa có nhật ký</span>';
 document.getElementById('pdIssues').innerHTML=issues.length?`<table><thead><tr><th>Mã</th><th>Tên văn bản</th><th>Loại văn bản</th><th>Trạng thái</th><th>Người tạo</th></tr></thead><tbody>${issues.map(x=>`<tr><td>${esc(x.code||'')}</td><td><b>${esc(x.title||typeLabel(x))}</b></td><td>${esc(typeLabel(x))}</td><td>${statusBadge(x.status)}</td><td>${esc(x.createdBy||x.created_by_name||'Chưa xác định')}</td></tr>`).join('')}</tbody></table>`:'<span class="muted">Không có nội dung chất lượng</span>';
-document.getElementById('pdDocs').innerHTML=docs.length?`<table><thead><tr><th>Mã</th><th>Hồ sơ</th><th>Ver</th><th>TT</th><th></th></tr></thead><tbody>${docs.map(x=>`<tr><td>${esc(x.code)}</td><td>${esc(x.name)}</td><td>v${x.version}</td><td>${docStatusBadge(x.status)}</td><td><button onclick="viewDoc('${x.id}')">Xem</button>${canModifyDoc(x)?` <button onclick="openDoc('${x.id}')">Sửa</button>`:''}</td></tr>`).join('')}</tbody></table>`:'<span class="muted">Chưa có hồ sơ</span>';
+document.getElementById('pdDocs').innerHTML=docs.length?`<table><thead><tr><th>Mã</th><th>Hồ sơ</th><th>Ver</th><th>TT</th><th></th></tr></thead><tbody>${docs.map(x=>`<tr><td>${esc(x.code)}</td><td>${esc(x.name)}</td><td>v${x.version}</td><td>${docStatusBadge(x.status)}</td><td><button onclick="viewDoc('${x.id}')">Xem</button>${canModifyDoc(x)?` <button onclick="openProjectDoc('${x.id}')">Sửa</button>`:''}</td></tr>`).join('')}</tbody></table>`:'<span class="muted">Chưa có hồ sơ. Bấm “Khai báo hồ sơ” để bổ sung.</span>';
 {const pdPeople=document.getElementById('pdPeople');const cachedTeam=db.teamCache?.[p.id]?.rows;if(pdPeople)pdPeople.innerHTML=cachedTeam&&typeof teamTableHtml==='function'?teamTableHtml(cachedTeam,p.id,{compact:true}):'<span class="muted">Đang tải nhân sự...</span>'}
 }
 function editCurrentProject(){if(currentProjectId)openProject(currentProjectId)}
+const CONTRACT_NATURE_TYPES=[['CONSULTING','Hợp đồng tư vấn xây dựng'],['CONSTRUCTION','Hợp đồng thi công xây dựng'],['SUPPLY','Hợp đồng mua sắm vật tư, thiết bị'],['EP','Hợp đồng EP (thiết kế - mua sắm)'],['EC','Hợp đồng EC (thiết kế - thi công)'],['PC','Hợp đồng PC (mua sắm - thi công)'],['EPC','Hợp đồng EPC'],['TURNKEY','Hợp đồng chìa khóa trao tay'],['OTHER','Hợp đồng khác']];
+const CONTRACT_PRICE_TYPES=[['LUMP_SUM','Trọn gói'],['FIXED_UNIT_PRICE','Đơn giá cố định'],['ADJUSTABLE_UNIT_PRICE','Đơn giá điều chỉnh'],['TIME_BASED','Theo thời gian'],['COST_PLUS_FEE','Chi phí cộng phí'],['OUTPUT_BASED','Theo kết quả đầu ra'],['PERCENTAGE','Theo tỷ lệ phần trăm'],['MIXED','Kết hợp'],['OTHER','Hình thức khác']];
+function contractOptions(items,current){return items.map(([value,label])=>`<option value="${value}" ${value===current?'selected':''}>${label}</option>`).join('')}
+function parseVnNumber(value){const clean=String(value??'').replace(/\s/g,'').replace(/\./g,'').replace(',','.');const number=Number(clean);return Number.isFinite(number)?number:null}
+function formatVnNumberInput(input){const number=parseVnNumber(input?.value);if(input&&number!==null)input.value=number.toLocaleString('vi-VN',{maximumFractionDigits:2})}
+function dateFromDuration(start,duration){if(!start||!Number.isInteger(duration)||duration<1)return '';const date=new Date(start+'T00:00:00');date.setDate(date.getDate()+duration-1);return date.toISOString().slice(0,10)}
+function durationFromDates(start,end){if(!start||!end)return null;const days=Math.round((new Date(end+'T00:00:00')-new Date(start+'T00:00:00'))/86400000)+1;return days>0?days:null}
+function syncContractDuration(prefix,source){const start=document.getElementById(prefix+'StartDate');const end=document.getElementById(prefix+'EndDate');const days=document.getElementById(prefix+'ExecutionDays');if(!start||!end||!days)return;if(source==='days'){const value=Number(days.value);if(start.value&&Number.isInteger(value)&&value>0)end.value=dateFromDuration(start.value,value);return}days.value=durationFromDates(start.value,end.value)||''}
 function openProject(pid=''){
-if(!canEditProject()){alert('Tài khoản chỉ được xem công trình được phân công.');return;}
+if(!canEditProject(pid)){alert('Chỉ người phụ trách tại công trình, Giám đốc hoặc Admin được sửa công trình.');return;}
 let p=db.projects.find(x=>x.id===pid)||{};
-const tvgsFile=p.contractFileTvgs?.name?'<p class="muted">Tệp hiện tại: '+esc(p.contractFileTvgs.name)+'</p>':'';
-const contractorFile=p.contractFileContractor?.name?'<p class="muted">Tệp hiện tại: '+esc(p.contractFileContractor.name)+'</p>':'';
+const tvgsCurrent=(p.files||[]).filter(x=>x.category==='TVGS_CONTRACT').slice(-1)[0];const contractorCurrent=(p.files||[]).filter(x=>x.category==='CONTRACTOR_CONTRACT').slice(-1)[0];
+const tvgsFile=tvgsCurrent?'<p class="muted">Tệp hiện tại: '+esc(tvgsCurrent.name)+'</p>':'';
+const contractorFile=contractorCurrent?'<p class="muted">Tệp hiện tại: '+esc(contractorCurrent.name)+'</p>':'';
 openModal(pid?'Sửa công trình':'Thêm công trình',`<div class="row">
 <h3 class="full" style="margin:0">TƯ VẤN GIÁM SÁT</h3>
 <div><label>Mã công trình</label><input id="fcode" value="${esc(p.code||'CT-2026-001')}"></div>
 <div><label>Tên công trình</label><input id="fname" value="${esc(p.name||'')}"></div>
 <div><label>Địa điểm</label><input id="fprovince" value="${esc(p.province||'')}"></div>
 <div><label>Chủ đầu tư</label><input id="fclient" value="${esc(p.client||'')}"></div>
+<div><label>Loại hợp đồng</label><select id="fconsultantContractType">${contractOptions(CONTRACT_NATURE_TYPES,p.consultantContractType||'CONSULTING')}</select></div>
+<div><label>Hình thức giá hợp đồng</label><select id="fconsultantPriceType"><option value="">Chọn hình thức giá</option>${contractOptions(CONTRACT_PRICE_TYPES,p.consultantPriceType||'')}</select></div>
 <div><label>Số hợp đồng</label><input id="fcontractNo" value="${esc(p.contractNo||'')}"></div>
 <div><label>Ngày ký hợp đồng</label><input id="fcontractDate" type="date" value="${p.contractDate||''}"></div>
-<div><label>Giá trị hợp đồng (VNĐ)</label><input id="fcontractValue" type="number" min="0" step="1000" value="${p.contractValue??''}"></div>
+<div><label>Giá trị hợp đồng (VNĐ)</label><input id="fcontractValue" inputmode="decimal" value="${p.contractValue==null?'':Number(p.contractValue).toLocaleString('vi-VN',{maximumFractionDigits:2})}" onblur="formatVnNumberInput(this)"></div>
+<div><label>Ngày bắt đầu TVGS</label><input id="fstartDate" type="date" value="${p.startDate||''}" onchange="syncContractDuration('f','dates')"></div>
+<div><label>Ngày kết thúc TVGS</label><input id="fendDate" type="date" value="${p.endDate||''}" onchange="syncContractDuration('f','dates')"></div>
+<div><label>Số ngày thực hiện hợp đồng</label><input id="fexecutionDays" type="number" min="1" step="1" value="${p.contractDurationDays||durationFromDates(p.startDate,p.endDate)||''}" oninput="syncContractDuration('f','days')"></div>
 <div class="full"><label>Nội dung hợp đồng</label><textarea id="fcontractContent" rows="3">${esc(p.contractContent||'')}</textarea></div>
 <div class="full"><label>Tệp hợp đồng TVGS</label><input id="fcontractFile" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.zip,image/*">${tvgsFile}</div>
 <h3 class="full" style="margin:8px 0 0">NHÀ THẦU</h3>
 <div><label>Tên nhà thầu</label><input id="fcontractor" value="${esc(p.contractorName||'')}"></div>
+<div><label>Loại hợp đồng</label><select id="fcontractorContractType">${contractOptions(CONTRACT_NATURE_TYPES,p.contractorContractType||'CONSTRUCTION')}</select></div>
+<div><label>Hình thức giá hợp đồng</label><select id="fcontractorPriceType"><option value="">Chọn hình thức giá</option>${contractOptions(CONTRACT_PRICE_TYPES,p.contractorPriceType||'')}</select></div>
 <div><label>Số hợp đồng nhà thầu</label><input id="fcontractorContractNo" value="${esc(p.contractorContractNo||'')}"></div>
 <div><label>Ngày ký hợp đồng nhà thầu</label><input id="fcontractorContractDate" type="date" value="${p.contractorContractDate||''}"></div>
-<div><label>Giá trị hợp đồng nhà thầu (VNĐ)</label><input id="fcontractorContractValue" type="number" min="0" step="1000" value="${p.contractorContractValue??''}"></div>
+<div><label>Giá trị hợp đồng nhà thầu (VNĐ)</label><input id="fcontractorContractValue" inputmode="decimal" value="${p.contractorContractValue==null?'':Number(p.contractorContractValue).toLocaleString('vi-VN',{maximumFractionDigits:2})}" onblur="formatVnNumberInput(this)"></div>
+<div><label>Ngày bắt đầu hoạt động</label><input id="fcontractorStartDate" type="date" value="${p.contractorStartDate||''}" onchange="syncContractDuration('fcontractor','dates')"></div>
+<div><label>Ngày kết thúc hoạt động</label><input id="fcontractorEndDate" type="date" value="${p.contractorEndDate||''}" onchange="syncContractDuration('fcontractor','dates')"></div>
+<div><label>Số ngày hoạt động của nhà thầu</label><input id="fcontractorExecutionDays" type="number" min="1" step="1" value="${p.contractorDurationDays||durationFromDates(p.contractorStartDate,p.contractorEndDate)||''}" oninput="syncContractDuration('fcontractor','days')"></div>
 <div class="full"><label>Nội dung hợp đồng nhà thầu</label><textarea id="fcontractorContractContent" rows="3">${esc(p.contractorContractContent||'')}</textarea></div>
 <div class="full"><label>Tệp hợp đồng nhà thầu</label><input id="fcontractorContractFile" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.zip,image/*">${contractorFile}</div>
-<div><label>Ngày khởi công</label><input id="fstartDate" type="date" value="${p.startDate||''}"></div>
-<div><label>Ngày kết thúc</label><input id="fendDate" type="date" value="${p.endDate||''}"></div>
-<div><label>Số ngày thực hiện</label><input id="fexecutionDays" type="number" value="${executionDays(p.startDate,p.endDate)||''}" readonly></div><div><label>Tiến độ kế hoạch hiện hành (%)</label><input id="fplannedProgress" type="number" min="0" max="100" step="0.1" value="${p.plannedProgress??''}"></div><div class="full"><label>Bảng tiến độ cơ sở của Nhà thầu (PDF hoặc ảnh)</label><input id="fbaselineProgressFile" type="file" accept="application/pdf,image/*"><div class="muted">Tệp là căn cứ đối chiếu. Nhập tỷ lệ kế hoạch tại mốc báo cáo để hệ thống cảnh báo chậm tiến độ.</div></div>
-<div><label>Tiến độ (%)</label><input id="fprogress" type="number" min="0" max="100" value="${p.progress||0}"></div>
+<div><label>Tiến độ kế hoạch hiện hành (%)</label><input id="fplannedProgress" type="number" min="0" max="100" step="0.1" value="${p.plannedProgress??''}"></div><div class="full"><label>Bảng tiến độ cơ sở của Nhà thầu (PDF hoặc ảnh)</label><input id="fbaselineProgressFile" type="file" accept="application/pdf,image/*"><div class="muted">Tệp là căn cứ đối chiếu tiến độ kế hoạch và thực tế.</div></div>
+<div><label>Tiến độ thực tế tổng thể dự phòng (%)</label><input id="fprogress" type="number" min="0" max="100" step="0.1" value="${p.progress||0}"><div class="muted">Chỉ nhập khi chưa có bảng tiến độ chi tiết; khi có bảng, hệ thống dùng số liệu cập nhật mới nhất.</div></div>
 <div><label>Trạng thái</label><select id="fstatus"><option>ĐANG THI CÔNG</option><option>CHUẨN BỊ</option><option>TẠM DỪNG</option><option>HOÀN THÀNH</option></select></div>
 <div class="full"><label>Địa chỉ chi tiết</label><input id="faddress" value="${esc(p.address||'')}"></div>
 <div class="full"><button class="primary" onclick="saveProject('${pid}')">Lưu công trình</button></div>
@@ -114,15 +150,18 @@ if(p.status)document.getElementById('fstatus').value=p.status;
 async function saveProject(pid){
 if(!canEdit())return alert('Bạn không có quyền sửa công trình.');
 let p=db.projects.find(x=>x.id===pid);
-const readContractFile=async(id,category,existing)=>{const file=document.getElementById(id)?.files?.[0];if(!file)return existing||null;if(file.size>15*1024*1024){alert('Mỗi tệp hợp đồng tối đa 15 MB.');return existing||null}return {name:file.name,type:file.type,size:file.size,data:await toDataURL(file),category,uploadedAt:new Date().toISOString()}};
-const tvgsFile=await readContractFile('fcontractFile','TVGS',p?.contractFileTvgs);const contractorFile=await readContractFile('fcontractorContractFile','NHÀ THẦU',p?.contractFileContractor);
+const tvgsFile=document.getElementById('fcontractFile')?.files?.[0]||null;const contractorFile=document.getElementById('fcontractorContractFile')?.files?.[0]||null;
+if([tvgsFile,contractorFile].some(f=>f&&f.size>25*1024*1024))return alert('Mỗi tệp hợp đồng tối đa 25 MB.');
 const baselineFileInput=document.getElementById('fbaselineProgressFile')?.files?.[0];
 if(baselineFileInput&&baselineFileInput.size>10*1024*1024)return alert('Bảng tiến độ tối đa 10 MB.');
-const baselineAttachment=baselineFileInput?{name:baselineFileInput.name,type:baselineFileInput.type,size:baselineFileInput.size,data:await toDataURL(baselineFileInput)}:null;
-let data={code:fcode.value.trim(),name:fname.value.trim(),province:fprovince.value.trim(),client:fclient.value.trim(),contractorName:fcontractor.value.trim(),progress:+fprogress.value,plannedProgress:fplannedProgress.value===''?null:+fplannedProgress.value,address:faddress.value.trim(),status:fstatus.value,contractNo:fcontractNo.value.trim(),contractDate:fcontractDate.value||'',startDate:fstartDate.value||'',endDate:fendDate.value||'',contractValue:fcontractValue.value===''?null:+fcontractValue.value,contractContent:fcontractContent.value.trim(),contractFileTvgs:tvgsFile,contractorContractNo:fcontractorContractNo.value.trim(),contractorContractDate:fcontractorContractDate.value||'',contractorContractValue:fcontractorContractValue.value===''?null:+fcontractorContractValue.value,contractorContractContent:fcontractorContractContent.value.trim(),contractFileContractor:contractorFile};
+let data={code:fcode.value.trim(),name:fname.value.trim(),province:fprovince.value.trim(),client:fclient.value.trim(),contractorName:fcontractor.value.trim(),progress:+fprogress.value,plannedProgress:fplannedProgress.value===''?null:+fplannedProgress.value,address:faddress.value.trim(),status:fstatus.value,contractNo:fcontractNo.value.trim(),contractDate:fcontractDate.value||'',startDate:fstartDate.value||'',endDate:fendDate.value||'',contractValue:parseVnNumber(fcontractValue.value),contractContent:fcontractContent.value.trim(),consultantContractType:fconsultantContractType.value,consultantPriceType:fconsultantPriceType.value||null,contractDurationDays:fexecutionDays.value?+fexecutionDays.value:null,contractorContractNo:fcontractorContractNo.value.trim(),contractorContractDate:fcontractorContractDate.value||'',contractorContractValue:parseVnNumber(fcontractorContractValue.value),contractorContractContent:fcontractorContractContent.value.trim(),contractorContractType:fcontractorContractType.value,contractorPriceType:fcontractorPriceType.value||null,contractorStartDate:fcontractorStartDate.value||'',contractorEndDate:fcontractorEndDate.value||'',contractorDurationDays:fcontractorExecutionDays.value?+fcontractorExecutionDays.value:null,rowVersion:p?.rowVersion??null};
 if(!data.name)return alert('Nhập tên công trình');
+if(data.startDate&&data.endDate&&!durationFromDates(data.startDate,data.endDate))return alert('Ngày kết thúc TVGS phải từ ngày bắt đầu trở đi.');
+if(data.contractorStartDate&&data.contractorEndDate&&!durationFromDates(data.contractorStartDate,data.contractorEndDate))return alert('Ngày kết thúc hoạt động nhà thầu phải từ ngày bắt đầu trở đi.');
 if(p){Object.assign(p,data);p.updatedAt=new Date().toISOString()}else{p={id:id(),...data,createdAt:new Date().toISOString()};db.projects.push(p)}
-if(baselineAttachment){db.pendingInitialProgressPlans[p.id]={plan_name:'Bảng tiến độ cơ sở Nhà thầu',report_date:new Date().toISOString().slice(0,10),planned_percent:Number(data.plannedProgress??0),actual_percent:Number(data.progress||0),original_end_date:data.endDate||null,is_extension:false,is_current:true,attachment:baselineAttachment};p.baselineProgressFile=baselineAttachment}audit(pid?'UPDATE':'CREATE','project',p.id,data.name+(data.contractNo?' / '+data.contractNo:''));queueSync('project',p.id,pid?'UPDATE':'CREATE',data);closeModal();save();if(currentProjectId===p.id)renderProjectDetail();if(navigator.onLine&&window.syncPendingProjects){await window.syncPendingProjects();await syncInitialProgressPlans();}
+const entries=[];if(tvgsFile)entries.push({file:tvgsFile,kind:'PROJECT_FILE',category:'TVGS_CONTRACT'});if(contractorFile)entries.push({file:contractorFile,kind:'PROJECT_FILE',category:'CONTRACTOR_CONTRACT'});if(baselineFileInput)entries.push({file:baselineFileInput,kind:'PROGRESS_BASELINE',category:'PROGRESS_BASELINE'});const queued=entries.length?await queueOfflineFiles('project',p.id,entries):[];
+if(baselineFileInput){db.pendingInitialProgressPlans[p.id]={plan_name:'Bảng tiến độ cơ sở Nhà thầu',report_date:new Date().toISOString().slice(0,10),planned_percent:Number(data.plannedProgress??0),actual_percent:Number(data.progress||0),original_end_date:data.endDate||null,is_extension:false,is_current:true,attachment_queue_id:queued[queued.length-1]}}
+audit(pid?'UPDATE':'CREATE','project',p.id,data.name+(data.contractNo?' / '+data.contractNo:''));queueSync('project',p.id,pid?'UPDATE':'CREATE',data);closeModal();save();if(currentProjectId===p.id)renderProjectDetail();if(navigator.onLine&&window.syncPendingProjects){await window.syncPendingProjects();await syncInitialProgressPlans();}
 }
 function serverProjects(){return (db.projects||[]).filter(p=>!p._localOnly)}
 function projectLabel(p){return (p.code?p.code+' - ':'')+(p.name||'')}

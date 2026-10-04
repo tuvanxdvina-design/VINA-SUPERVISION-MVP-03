@@ -1,0 +1,6 @@
+interface:
+  display_name: "VICOAD — Thiết kế chức năng"
+  short_description: "Thiết kế chức năng cho phần mềm quản lý TVGS"
+  default_prompt: "Dùng $vicoad-design để xử lý yêu cầu hiện tại của dự án TVGS."
+policy:
+  allow_implicit_invocation: true

@@ -7,6 +7,7 @@ const DOC_STATUS={DRAFT:'Bản nháp',SUBMITTED:'Chờ duyệt',APPROVED:'Đã d
 const MAX_DOC_FILE=15*1024*1024;
 function renderDocs(){
  const pid=document.getElementById('docProject')?.value||'';const group=document.getElementById('docGroup')?.value||'';
+ const project=db.projects.find(x=>x.id===pid);const context=document.getElementById('docProjectContext');if(context)context.textContent=project?'Công trình: '+project.code+' — '+project.name:'Chọn công trình để khai báo, cập nhật và quản lý hồ sơ.';
  const a=(db.docs||[]).filter(x=>!x.pendingUpload&&(!pid||x.projectId===pid)&&(!group||docGroup(x)===group));
  const addBtn=document.querySelector('#docs .toolbar .primary');if(addBtn)addBtn.style.display=(db.projects||[]).some(p=>canCreateDocIn(p.id))?'':'none';
  const rows=a.map(x=>{const p=db.projects.find(v=>v.id===x.projectId)||{};return '<tr><td>'+esc(x.code||'')+(x.pendingUpload?' <span class="chip warn">Chưa lên máy chủ</span>':'')+'</td><td>'+esc(p.name||'')+'</td><td>'+(docGroup(x)==='REPORT'?'Báo cáo':'Hồ sơ pháp lý')+'</td><td><b>'+esc(x.name||'')+'</b><br><span class="muted">'+esc(docTypeLabel(x.type))+'</span></td><td>'+docStatusBadge(x.status)+returnedChip(x)+'</td><td>'+esc(x.createdBy||'')+(x.updatedBy&&x.updatedBy!==x.createdBy?'<br><span class="muted">Sửa: '+esc(x.updatedBy)+'</span>':'')+'<br><span class="muted">'+esc(fmt(x.updatedAt||x.createdAt))+'</span></td><td>'+docFileLinks(x)+'</td><td><button onclick="viewDoc(\''+x.id+'\')">Xem</button>'+(canModifyDoc(x)?' <button onclick="openDoc(\''+x.id+'\')">Sửa</button>':'')+deleteBtn('doc',x.serverId,x.projectId,(x.code||'')+' '+(x.name||''))+'</td></tr>'}).join('');
@@ -55,15 +56,19 @@ async function saveDoc(docId=''){
  const msg=document.getElementById('docMessage');const btn=document.getElementById('docSaveBtn');const say=t=>{if(msg)msg.textContent=t};
  const group=document.getElementById('dgroup').value;const report=group==='REPORT';
  const name=document.getElementById('dname').value.trim();if(!name)return say('Nhập tên hồ sơ.');
+ const personnelRows=[...document.querySelectorAll('#personnelChangesList .personnel-change-row')];
+ const decisionFiles=[];
+ const personnelChanges=personnelRows.map((r,index)=>{const date=r.querySelector('.pc-date')?.value||'';const decision=r.querySelector('.pc-decision')?.value.trim()||'';const category='Quyết định thay thế nhân sự '+(decision||date||String(index+1));const file=r.querySelector('.pc-file')?.files?.[0];if(file)decisionFiles.push({file,category});return {date,removed:r.querySelector('.pc-removed')?.value.trim()||'',added:r.querySelector('.pc-added')?.value.trim()||'',decision,fileCategory:decision||date?category:''}}).filter(v=>v.date||v.removed||v.added||v.decision);
  const details=report?{reportType:document.getElementById('dreportType').value,period:document.getElementById('dperiod').value,plannedProgress:Number(document.getElementById('dplanned').value||0),actualProgress:Number(document.getElementById('dactual').value||0),manpower:Number(document.getElementById('dmanpower').value||0),volumeCompleted:document.getElementById('dvolume').value.trim(),scheduleStatus:document.getElementById('dschedule').value}
-  :{personnelChanges:[...document.querySelectorAll('#personnelChangesList .personnel-change-row')].map(r=>({date:r.querySelector('.pc-date')?.value||'',removed:r.querySelector('.pc-removed')?.value.trim()||'',added:r.querySelector('.pc-added')?.value.trim()||'',decision:r.querySelector('.pc-decision')?.value.trim()||''})).filter(v=>v.date||v.removed||v.added||v.decision)};
+  :{personnelChanges};
  const slots=[...document.querySelectorAll('#mbody input[type=file][data-category]')].filter(i=>i.closest('.full')?.style.display!=='none');
- const files=[];slots.forEach(i=>[...(i.files||[])].forEach(f=>files.push({file:f,category:i.dataset.category})));
+ const files=[...decisionFiles];slots.forEach(i=>[...(i.files||[])].forEach(f=>files.push({file:f,category:i.dataset.category})));
  const big=files.find(f=>f.file.size>MAX_DOC_FILE);if(big)return say('Tệp "'+big.file.name+'" vượt 15 MB.');
  if(btn)btn.disabled=true;
  try{
   say('Đang lưu thông tin hồ sơ...');
-  const body={project_id:document.getElementById('dproj').value,doc_group:group,type:document.getElementById('dtype').value,name,details};
+  const currentDoc=docId?db.docs.find(v=>v.id===docId||v.serverId===docId):null;
+  const body={project_id:document.getElementById('dproj').value,doc_group:group,type:document.getElementById('dtype').value,name,details,expected_row_version:currentDoc?.rowVersion??null};
   let doc=docId?await apiRequest('/documents/'+encodeURIComponent(docId),{method:'PATCH',body:JSON.stringify(body)}):await apiRequest('/documents',{method:'POST',body:JSON.stringify(body)});
   const errors=[];
   for(const [n,f] of files.entries()){say('Đang tải tệp '+(n+1)+'/'+files.length+': '+f.file.name);try{await uploadDocFile(doc.id,f.file,f.category)}catch(error){errors.push(f.file.name+': '+error.message)}}

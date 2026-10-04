@@ -1,4 +1,5 @@
 const pool = require('../utils/db');
+const fileStore = require('./fileStore');
 const permissionService = require('./permissionService');
 
 // Chuẩn hóa họ tên: NFC + bỏ khoảng trắng thừa. Dùng thống nhất ở mọi đường ghi.
@@ -105,6 +106,42 @@ class ProjectPersonnelService {
     return result.rows[0];
   }
 
+  async listFiles(personnelId) {
+    return (await pool.query(`WITH target AS (
+        SELECT id, user_id FROM project_personnel WHERE id=$1
+      ), related AS (
+        SELECT pp.id FROM project_personnel pp, target t
+        WHERE pp.status='ACTIVE' AND (pp.id=t.id OR (t.user_id IS NOT NULL AND pp.user_id=t.user_id))
+      )
+      SELECT f.id, f.personnel_id, f.category, f.file_name, f.file_type, f.file_size, f.uploaded_at
+      FROM project_personnel_files f WHERE f.personnel_id IN (SELECT id FROM related)
+      ORDER BY f.uploaded_at, f.id`, [personnelId])).rows;
+  }
+
+  async addFile(personnel, category, name, type, buffer, userId) {
+    const stored = await fileStore.put(buffer);
+    return (await pool.query(`INSERT INTO project_personnel_files
+      (personnel_id, project_id, category, file_name, file_type, file_size, sha256, storage_key, uploaded_by)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      ON CONFLICT (personnel_id, sha256) DO UPDATE SET file_name=EXCLUDED.file_name, category=EXCLUDED.category
+      RETURNING id, category, file_name, file_type, file_size, uploaded_at, (xmax=0) AS created`,
+    [personnel.id, personnel.project_id, category, name, type, buffer.length, stored.sha256, stored.storageKey, userId])).rows[0];
+  }
+
+  async getFile(personnelId, fileId) {
+    const row = (await pool.query(`WITH target AS (
+        SELECT id, user_id FROM project_personnel WHERE id=$1
+      ), related AS (
+        SELECT pp.id FROM project_personnel pp, target t
+        WHERE pp.status='ACTIVE' AND (pp.id=t.id OR (t.user_id IS NOT NULL AND pp.user_id=t.user_id))
+      )
+      SELECT f.file_name,f.file_type,f.storage_key FROM project_personnel_files f
+      WHERE f.id=$2 AND f.personnel_id IN (SELECT id FROM related)`, [personnelId, fileId])).rows[0];
+    if (!row) return null;
+    const buffer = await fileStore.get(row.storage_key);
+    return buffer ? { name: row.file_name, type: row.file_type, buffer } : null;
+  }
+
   // Thêm/cập nhật theo ID; nếu ID mới nhưng trùng tên (đã chuẩn hóa) thì cập nhật dòng cũ
   // thay vì tạo dòng thứ hai.
   async upsert(data) {
@@ -175,6 +212,10 @@ class ProjectPersonnelService {
         RETURNING *
       `, [cleanName(data.full_name), String(data.assignment_title || '').trim(),
           data.certificate === undefined ? null : String(data.certificate), id])).rows[0];
+      if (row && row.user_id && data.certificate !== undefined) {
+        await client.query(`UPDATE project_personnel SET certificate=NULLIF($1,''), updated_at=NOW()
+          WHERE user_id=$2 AND status='ACTIVE' AND id<>$3`, [String(data.certificate), row.user_id, row.id]);
+      }
       if (row) await this.syncMemberTitle(client, row);
       await client.query('COMMIT');
       return row;
@@ -273,14 +314,18 @@ class ProjectPersonnelService {
       if (personnel) {
         personnel = (await client.query(`
           UPDATE project_personnel SET user_id = $1,
-            assignment_title = COALESCE(NULLIF($2, ''), assignment_title), updated_at = NOW()
+            assignment_title = COALESCE(NULLIF($2, ''), assignment_title),
+            certificate = COALESCE(NULLIF(certificate,''), (SELECT certificate FROM project_personnel
+              WHERE user_id=$1 AND status='ACTIVE' AND NULLIF(certificate,'') IS NOT NULL ORDER BY updated_at DESC LIMIT 1)),
+            updated_at = NOW()
           WHERE id = $3 RETURNING *
         `, [user_id, title, personnel.id])).rows[0];
       } else {
         if (!title) throw httpError(400, 'Hãy nhập chức danh tại công trình');
         personnel = (await client.query(`
-          INSERT INTO project_personnel (project_id, full_name, assignment_title, user_id, status, created_by)
-          VALUES ($1, $2, $3, $4, 'ACTIVE', $5) RETURNING *
+          INSERT INTO project_personnel (project_id, full_name, assignment_title, user_id, certificate, status, created_by)
+          VALUES ($1, $2, $3, $4, (SELECT certificate FROM project_personnel
+            WHERE user_id=$4 AND status='ACTIVE' AND NULLIF(certificate,'') IS NOT NULL ORDER BY updated_at DESC LIMIT 1), 'ACTIVE', $5) RETURNING *
         `, [project_id, cleanName(user.full_name), title, user_id, actorId])).rows[0];
       }
       const member = await this.upsertMember(client, project_id, user, personnel.assignment_title, actorId);
@@ -318,6 +363,14 @@ class ProjectPersonnelService {
       const row = (await client.query(
         'UPDATE project_personnel SET user_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *', [user_id, personnelId]
       )).rows[0];
+      if (!row.certificate) {
+        const shared = (await client.query(`SELECT certificate FROM project_personnel
+          WHERE user_id=$1 AND status='ACTIVE' AND id<>$2 AND NULLIF(certificate,'') IS NOT NULL
+          ORDER BY updated_at DESC LIMIT 1`, [user_id, personnelId])).rows[0]?.certificate;
+        if (shared) row.certificate = (await client.query(
+          'UPDATE project_personnel SET certificate=$1, updated_at=NOW() WHERE id=$2 RETURNING certificate', [shared, personnelId]
+        )).rows[0].certificate;
+      }
       const member = await this.upsertMember(client, row.project_id, user, row.assignment_title, actorId);
       await this.saveAccess(client, member.id, access_permissions, work_scope);
       await client.query('COMMIT');

@@ -43,7 +43,7 @@ function reviewItem(kind,id){
  const l=(db.logs||[]).find(v=>v.serverId===id);const p=(db.projects||[]).find(v=>v.id===(l?.projectId||fromInbox?.project_id))||{};
  const date=l?.date||fromInbox?.log_date||'',shift=l?.shift||fromInbox?.shift||'';
  return {title:'Nhật ký '+progressDate(date)+' — '+shiftLabel(shift)+(p.name?' · '+p.name:''),by:l?.createdBy||fromInbox?.created_by_name||'',at:l?.submittedAt||fromInbox?.submitted_at||'',local:l,projectId:l?.projectId||fromInbox?.project_id,last:lastOf(l),
-  extra:l?'<p><b>Công việc:</b> '+esc(l.work||'')+'</p><p class="muted">Thời tiết: '+esc(l.weather||'—')+' · Nhân lực: '+Number(l.workers||0)+' · Máy: '+Number(l.machines||0)+(l.note?' · Ghi chú: '+esc(l.note):'')+'</p>'+((l.fileCount||l.photoCount)?'<button type="button" onclick="showLogFiles(\''+l.id+'\')">Xem tệp/ảnh ('+((l.fileCount||0)+(l.photoCount||0))+')</button>':''):'<p class="muted">'+esc(fromInbox?.title||'')+'</p>'};
+  extra:l?'<p><b>Đơn vị thi công:</b> '+esc(l.contractorUnit||'—')+' · <b>Hạng mục:</b> '+esc(l.workItem||'—')+'</p><p><b>Công việc:</b> '+esc(l.work||'')+'</p><p class="muted">Thời tiết: '+esc(l.weather||'—')+' · CBKT: '+Number(l.technicalStaff||0)+' · Nhân công: '+Number(l.workers||0)+' · Máy: '+Number(l.machines||0)+(l.recommendation?' · Kiến nghị: '+esc(l.recommendation):'')+(l.note?' · Ghi chú: '+esc(l.note):'')+'</p>'+((l.fileCount||l.photoCount)?'<button type="button" onclick="showLogFiles(\''+l.id+'\')">Xem tệp/ảnh ('+((l.fileCount||0)+(l.photoCount||0))+')</button>':''):'<p class="muted">'+esc(fromInbox?.title||'')+'</p>'};
 }
 function openReviewDecision(kind,id,preset){
  if(!apiOnline())return alert('Cần kết nối mạng để duyệt.');
@@ -83,6 +83,12 @@ async function loadInbox(){
  try{inboxData=await apiRequest('/reviews/inbox')}
  catch(error){const el=document.getElementById('inboxBody');if(el)el.innerHTML='<p class="muted">Không tải được: '+esc(error.message)+'</p>';return}
  applyInboxNavVisibility();updateInboxBadge();renderInbox();
+}
+async function refreshInbox(button){
+ const state=document.getElementById('inboxRefreshState');if(button)button.disabled=true;if(state)state.textContent='Đang tải...';
+ inboxData=null;renderInbox();
+ try{await loadInbox();if(state)state.textContent='Đã cập nhật lúc '+new Date().toLocaleTimeString('vi-VN')}
+ finally{if(button)button.disabled=false}
 }
 function updateInboxBadge(){
  const c=inboxData?.counts||{};const reviewer=isReviewer();

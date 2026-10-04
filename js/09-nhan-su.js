@@ -1,5 +1,5 @@
-function personnelChangeRows(value){const arr=Array.isArray(value)?value:(value?[{date:'',removed:'',added:'',decision:String(value)}]:[]);return (arr.length?arr:[{date:'',removed:'',added:'',decision:''}]).map(v=>`<div class="personnel-change-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;margin:6px 0"><input class="pc-date" type="date" value="${esc(v.date||'')}" placeholder="Ngày"><input class="pc-removed" value="${esc(v.removed||'')}" placeholder="Người rút"><input class="pc-added" value="${esc(v.added||'')}" placeholder="Người thay thế"><input class="pc-decision" value="${esc(v.decision||'')}" placeholder="Số quyết định"><button type="button" onclick="this.parentElement.remove()">Xóa</button></div>`).join('')}
-function addPersonnelChangeRow(){const box=document.getElementById('personnelChangesList');if(!box)return;const d=document.createElement('div');d.className='personnel-change-row';d.style='display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;margin:6px 0';d.innerHTML='<input class="pc-date" type="date" placeholder="Ngày"><input class="pc-removed" placeholder="Người rút"><input class="pc-added" placeholder="Người thay thế"><input class="pc-decision" placeholder="Số quyết định"><button type="button" onclick="this.parentElement.remove()">Xóa</button>';box.appendChild(d)}
+function personnelChangeRows(value){const arr=Array.isArray(value)?value:(value?[{date:'',removed:'',added:'',decision:String(value)}]:[]);return (arr.length?arr:[{date:'',removed:'',added:'',decision:''}]).map(v=>`<div class="personnel-change-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr minmax(170px,1.2fr) auto;gap:8px;margin:6px 0"><input class="pc-date" type="date" value="${esc(v.date||'')}" aria-label="Ngày thay thế"><input class="pc-removed" value="${esc(v.removed||'')}" placeholder="Người rút"><input class="pc-added" value="${esc(v.added||'')}" placeholder="Người thay thế"><input class="pc-decision" value="${esc(v.decision||'')}" placeholder="Số quyết định TK"><input class="pc-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" aria-label="Tệp quyết định thay thế"><button type="button" onclick="this.parentElement.remove()">Xóa</button></div>`).join('')}
+function addPersonnelChangeRow(){const box=document.getElementById('personnelChangesList');if(!box)return;const d=document.createElement('div');d.className='personnel-change-row';d.style='display:grid;grid-template-columns:1fr 1fr 1fr 1fr minmax(170px,1.2fr) auto;gap:8px;margin:6px 0';d.innerHTML='<input class="pc-date" type="date" aria-label="Ngày thay thế"><input class="pc-removed" placeholder="Người rút"><input class="pc-added" placeholder="Người thay thế"><input class="pc-decision" placeholder="Số quyết định TK"><input class="pc-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" aria-label="Tệp quyết định thay thế"><button type="button" onclick="this.parentElement.remove()">Xóa</button>';box.appendChild(d)}
 const TITLE_OPTIONS=['TVGS trưởng','GS viên','GS hiện trường','Kỹ sư TVGS','Phụ trách hồ sơ','An toàn lao động','Khác'];
 let assignmentUsers=[];
 let teamRowsByProject={};
@@ -58,6 +58,7 @@ async function loadProjectTeamDirectory(projectId=''){
  const el=document.getElementById('projectTeamDirectory');const select=document.getElementById('directoryProject');if(!el||!select)return;
  const addBtn=document.getElementById('addPersonButton');if(addBtn)addBtn.style.display=canManageAssignments()?'':'none';
  const pid=fillProjectSelect(select,projectId||select.value||currentProjectId||'');
+ if(typeof updateProjectContext==='function')updateProjectContext(pid,'peopleContextRole');
  if(!pid){el.innerHTML=localOnlyNotice()+'<p class="muted">Chưa chọn công trình.</p>';return}
  el.innerHTML='<p class="muted">Đang tải...</p>';
  const rows=await fetchTeam(pid);if(select.value!==pid)return;
@@ -106,6 +107,18 @@ function readPermEditor(){
  const list=[...document.querySelectorAll('.tmPerm:checked')].map(x=>x.value);if(!list.includes('VIEW'))list.unshift('VIEW');
  return {access_permissions:list,work_scope:scope};
 }
+async function loadPersonnelFiles(personnelId){
+ const box=document.getElementById('tmCertFiles');if(!box||!personnelId)return;
+ try{
+  const files=await apiRequest('/project-personnel/'+encodeURIComponent(personnelId)+'/files');
+  box.innerHTML=files.length?files.map(f=>'<div><a href="#" onclick="openServerFile(\'/project-personnel/'+personnelId+'/files/'+f.id+'\','+esc(JSON.stringify({name:f.file_name,type:f.file_type}))+',false);return false">'+esc(f.file_name)+'</a> <span class="muted">('+fileSize(f.file_size)+')</span></div>').join(''):'<span class="muted">Chưa có tệp chứng chỉ.</span>';
+ }catch(error){box.textContent='Không tải được danh sách tệp: '+error.message}
+}
+async function uploadPersonnelCertificate(personnelId,file){
+ const res=await fetch(API_BASE+'/project-personnel/'+encodeURIComponent(personnelId)+'/files?name='+encodeURIComponent(file.name),{method:'POST',headers:{Authorization:'Bearer '+getAuthToken(),'Content-Type':file.type||'application/octet-stream'},body:file});
+ if(!res.ok){let message='HTTP '+res.status;try{message=(await res.json()).error||message}catch(_){}throw new Error(message)}
+ return res.json();
+}
 async function openTeamMember(encodedKey,pid){
  const key=decodeURIComponent(encodedKey||'');
  const r=key?(teamRowsByProject[pid]||[]).find(x=>x.key===key):null;
@@ -114,7 +127,8 @@ async function openTeamMember(encodedKey,pid){
  const manager=canManageAssignments();
  if(!manager){
   if(!r)return;
-  openModal('Nhân sự: '+r.full_name,'<div class="card"><p><b>Công trình:</b> '+esc(projectLabel(p))+'</p><p><b>Chức danh:</b> '+esc(r.assignment_title||'Chưa nhập')+'</p><p><b>Chứng chỉ:</b> '+esc(r.certificate||'—')+'</p>'+(r.is_me?'<p><b>Tài khoản:</b> '+accountCell(r,pid)+'</p><p><b>Quyền của tôi tại công trình:</b> '+permChips(r.access_permissions,r.permission_source)+'</p><p><b>Làm việc ở đâu:</b> '+esc(r.work_scope||'—')+'</p>':'')+'</div>');
+  openModal('Nhân sự: '+r.full_name,'<div class="card"><p><b>Công trình:</b> '+esc(projectLabel(p))+'</p><p><b>Chức danh:</b> '+esc(r.assignment_title||'Chưa nhập')+'</p><p><b>Chứng chỉ:</b> '+esc(r.certificate||'—')+'</p>'+(r.personnel_id?'<p><b>Bản chụp/scan:</b></p><div id="tmCertFiles" class="muted">Đang tải...</div>':'')+(r.is_me?'<p><b>Tài khoản:</b> '+accountCell(r,pid)+'</p><p><b>Quyền của tôi tại công trình:</b> '+permChips(r.access_permissions,r.permission_source)+'</p><p><b>Làm việc ở đâu:</b> '+esc(r.work_scope||'—')+'</p>':'')+'</div>');
+  if(r.personnel_id)void loadPersonnelFiles(r.personnel_id);
   return;
  }
  if(r&&r.account_status==='PENDING_SYNC')return alert('Nhân sự này đang chờ đồng bộ lên máy chủ. Hãy kết nối mạng và tải lại trang.');
@@ -125,7 +139,8 @@ async function openTeamMember(encodedKey,pid){
  const info='<div class="row">'
   +'<div><label>Họ tên</label><input id="tmName" maxlength="255" value="'+esc(r?.full_name||'')+'"'+(isMemberOnly?' disabled title="Lấy theo tên tài khoản"':'')+'></div>'
   +'<div><label>Chức danh tại công trình (công việc được giao)</label>'+titleSelectHtml('tm',r?.assignment_title||'')+'</div>'
-  +'<div class="full"><label>Chứng chỉ</label><input id="tmCert" value="'+esc(r?.certificate||'')+'"'+(isMemberOnly?' disabled placeholder="Thêm hồ sơ nhân sự để nhập chứng chỉ"':'')+'></div></div>';
+  +'<div class="full"><label>Chứng chỉ</label><input id="tmCert" value="'+esc(r?.certificate||'')+'" placeholder="Số, loại và thời hạn chứng chỉ"></div>'
+  +'<div class="full"><label>Bản chụp/scan chứng chỉ</label><input id="tmCertFile" type="file" accept="application/pdf,image/jpeg,image/png,image/webp"><div id="tmCertFiles" class="muted">'+(r?.personnel_id?'Đang tải...':'Tệp sẽ được lưu tập trung sau khi tạo hồ sơ nhân sự.')+'</div></div></div>';
  let account='';
  if(r&&r.account_status==='LINKED'){
   const mismatch=r.account_name&&cleanPersonName(r.account_name).toLocaleLowerCase('vi')!==cleanPersonName(r.full_name).toLocaleLowerCase('vi');
@@ -148,11 +163,14 @@ async function openTeamMember(encodedKey,pid){
  document.getElementById('tmTitle')?.addEventListener('change',refreshPermDefaults);
  document.getElementById('tmTitleOther')?.addEventListener('input',refreshPermDefaults);
  document.getElementById('tmNewUsername')?.dispatchEvent(new Event('input'));
+ if(r?.personnel_id)void loadPersonnelFiles(r.personnel_id);
 }
 async function saveTeamMember(encodedKey,pid){
  const key=decodeURIComponent(encodedKey||'');const r=key?(teamRowsByProject[pid]||[]).find(x=>x.key===key):null;
+ const isMemberOnly=!!(r&&!r.personnel_id);
  const msg=document.getElementById('tmMessage');const say=t=>{if(msg)msg.textContent=t};
  const name=cleanPersonName(document.getElementById('tmName')?.value);const title=readTitle('tm');const cert=(document.getElementById('tmCert')?.value||'').trim();
+ const certFile=document.getElementById('tmCertFile')?.files?.[0]||null;if(certFile&&certFile.size>15*1024*1024)return say('Tệp chứng chỉ tối đa 15 MB.');
  if(!name)return say('Nhập họ tên.');if(!title)return say('Chọn hoặc nhập chức danh tại công trình.');
  if(!r){const dup=(teamRowsByProject[pid]||[]).find(x=>cleanPersonName(x.full_name).toLocaleLowerCase('vi')===name.toLocaleLowerCase('vi'));if(dup)return say('Đã có "'+dup.full_name+'" trong danh sách công trình. Đóng cửa sổ này và bấm vào tên đó để sửa.')}
  const perm=readPermEditor();const accType=document.getElementById('tmAccType')?.value||'';const accMode=document.querySelector('input[name="tmAccMode"]:checked')?.value||'';
@@ -161,31 +179,36 @@ async function saveTeamMember(encodedKey,pid){
  if(newAccount){if(!USERNAME_RE.test(newAccount.username))return say(USERNAME_RULE);if(document.getElementById('tmUserHint')?.dataset.taken==='1')return say('Tên đăng nhập đã có người dùng — chọn tên khác.');if(newAccount.password.length<8)return say('Mật khẩu ban đầu tối thiểu 8 ký tự.')}
  if(accType&&accMode==='EXISTING'&&!accountId)return say('Chọn tài khoản có sẵn.');
  if(!navigator.onLine){
+  if(certFile)return say('Cần kết nối máy chủ để tải bản chụp/scan chứng chỉ.');
   if(r)return say('Đang mất mạng: chỉ thêm mới được khi offline, sửa/cấp quyền cần kết nối.');
   const p=(db.projects||[]).find(x=>x.id===pid)||{};
   db.people=db.people||[];db.people.push({id:id(),name,role:title,certs:cert,projectId:pid,projectCode:p.code||'',projectName:p.name||''});
   audit('CREATE','person','',name);save();closeModal();return loadProjectTeamDirectory(pid);
  }
- let createdSlip=null;
+ let createdSlip=null;let fileError='';
  try{
   say('Đang lưu...');
   let personnelId=r?.personnel_id||null;
-  if(!r||r.personnel_id){
+  if(!r||r.personnel_id||isMemberOnly){
    const body={project_id:pid,full_name:name,assignment_title:title,certificate:cert};
    const row=r?await apiRequest('/project-personnel/'+encodeURIComponent(r.personnel_id),{method:'PUT',body:JSON.stringify(body)})
             :await apiRequest('/project-personnel',{method:'POST',body:JSON.stringify(body)});
    personnelId=row.id;
   }
-  if(r&&r.account_status==='LINKED'){
+  if(r&&isMemberOnly&&personnelId&&r.user_id){
+   await apiRequest('/project-personnel/'+encodeURIComponent(personnelId)+'/link-account',{method:'POST',body:JSON.stringify({user_id:r.user_id,...perm})});
+  }else if(r&&r.account_status==='LINKED'){
    const body={...perm};if(!r.personnel_id)body.assignment_title=title;
    await apiRequest('/project-members/'+encodeURIComponent(r.member_id),{method:'PUT',body:JSON.stringify(body)});
   }else if((accountId||newAccount)&&personnelId){
    if(newAccount){const u=await apiRequest('/users',{method:'POST',body:JSON.stringify({...newAccount,full_name:name})});accountId=u.id;assignmentUsers.push(u);createdSlip={fullName:name,username:u.username,password:newAccount.password,role:ROLE_LABELS[u.role_name]||u.role_name,project:(db.projects||[]).find(x=>x.id===pid)?.name||'',title};say('Đã tạo tài khoản '+u.username+'. Đang cấp quyền...')}
    await apiRequest('/project-personnel/'+encodeURIComponent(personnelId)+'/link-account',{method:'POST',body:JSON.stringify({user_id:accountId,...perm})});
   }
+  if(certFile&&personnelId){say('Đang tải bản chụp/scan chứng chỉ...');try{await uploadPersonnelCertificate(personnelId,certFile)}catch(error){fileError=error.message}}
   audit(r?'UPDATE':'CREATE','project_personnel',personnelId||r?.member_id||'',name+' — '+title);save();
   closeModal();await refreshTeamViews(pid);
   if(createdSlip)showAccountSlip(createdSlip);
+  if(fileError)alert('Thông tin nhân sự đã lưu, nhưng tệp chứng chỉ chưa tải được: '+fileError);
  }catch(error){say('Không lưu được: '+error.message)}
 }
 async function unlinkTeamAccount(encodedKey,pid){

@@ -1,7 +1,7 @@
 // ============================================================================
 // KIỂM THỬ HỒI QUY (dành cho người phát triển) — chạy trên CSDL THỬ RIÊNG, không đụng dữ liệu thật.
 // Yêu cầu: PostgreSQL truy cập được bằng psql; biến môi trường TEST_DB_URL, ví dụ
-//   TEST_DB_URL=postgres://vina_user:vina_password_123@127.0.0.1:5432/vina_regression
+//   TEST_DB_URL=postgres://vina_user:vina_password_123@127.0.0.1:5433/vina_regression
 // Chạy (tại backend): node --test tests/regression.test.js
 // Kịch bản: dựng CSDL từ schema gốc + migration CŨ, nạp dữ liệu lỗi giống thực tế
 // (nhân sự trùng tên NFD/khoảng trắng, nhật ký không có ca, mã ca MORNING, phân công Admin tự sinh),
@@ -86,6 +86,51 @@ test('nhân sự: thêm trùng tên (khác dấu/hoa thường) không tạo dò
   assert.ok(after.some(x => x.full_name === 'Trần Văn C'), 'giữ nguyên cách viết họ tên đã có');
 });
 
+test('nhân sự: bản chụp chứng chỉ được lưu tập trung và tải lại đúng', async () => {
+  const person = (await api('GET', `/project-personnel/project/${P['001']}/team`)).body.find(x => x.personnel_id);
+  assert.ok(person?.personnel_id);
+  const content = Buffer.from('%PDF-1.4 chung chi nhan su');
+  const uploaded = await api('POST', `/project-personnel/${person.personnel_id}/files?name=chung-chi.pdf`, content, 'admin', { 'Content-Type': 'application/pdf' });
+  assert.equal(uploaded.status, 201);
+  const files = (await api('GET', `/project-personnel/${person.personnel_id}/files`)).body;
+  assert.ok(files.some(x => x.file_name === 'chung-chi.pdf'));
+  const downloaded = await api('GET', `/project-personnel/${person.personnel_id}/files/${uploaded.body.id}`);
+  assert.equal(downloaded.body.toString(), content.toString());
+});
+
+test('nhân sự: nhập chứng chỉ một lần và dùng lại ở nhiều công trình theo cùng tài khoản', async () => {
+  const created = await api('POST', '/users', { username: 'hoso.dungchung', full_name: 'Hồ Sơ Dùng Chung', password: 'TamThoi123', role_name: 'ENGINEER' });
+  assert.equal(created.status, 201);
+  for (const [project, title] of [[P['001'], 'TVGS trưởng'], [P['002'], 'GS viên']]) {
+    assert.equal((await api('POST', '/project-members', { project_id: project, user_id: created.body.id, assignment_title: title })).status, 201);
+  }
+  const a = (await api('GET', `/project-personnel/project/${P['001']}/team`)).body.find(x => x.user_id === created.body.id);
+  const b = (await api('GET', `/project-personnel/project/${P['002']}/team`)).body.find(x => x.user_id === created.body.id);
+  assert.equal(a.assignment_title, 'TVGS trưởng');assert.equal(b.assignment_title, 'GS viên');
+  assert.equal((await api('PUT', `/project-personnel/${a.personnel_id}`, { certificate: 'CCHN-GS-001' })).status, 200);
+  const certificate = Buffer.from('%PDF-1.4 shared certificate');
+  const file = await api('POST', `/project-personnel/${a.personnel_id}/files?name=chung-chi-dung-chung.pdf`, certificate, 'admin', { 'Content-Type': 'application/pdf' });
+  assert.equal(file.status, 201);
+  const teamB = (await api('GET', `/project-personnel/project/${P['002']}/team`)).body.find(x => x.user_id === created.body.id);
+  assert.equal(teamB.certificate, 'CCHN-GS-001');
+  const filesB = (await api('GET', `/project-personnel/${b.personnel_id}/files`)).body;
+  assert.ok(filesB.some(x => x.id === file.body.id), 'công trình B phải dùng lại tệp hồ sơ đã nhập ở công trình A');
+});
+
+test('công trình: lưu loại hợp đồng và tính ngày cho TVGS/nhà thầu', async () => {
+  const current = (await api('GET', `/projects/${P['001']}`)).body;
+  const updated = await api('PATCH', `/projects/${P['001']}`, {
+    name: current.name, contract_no: current.contract_no,
+    consultant_contract_type: 'CONSULTING', consultant_price_type: 'LUMP_SUM', contract_duration_days: 120,
+    contractor_contract_type: 'CONSTRUCTION', contractor_price_type: 'FIXED_UNIT_PRICE',
+    contractor_start_date: '2026-10-01', contractor_end_date: '2027-01-28', contractor_duration_days: 120
+  });
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.contract_duration_days, 120);
+  assert.equal(updated.body.contractor_contract_type, 'CONSTRUCTION');
+  assert.equal(String(updated.body.contractor_end_date).slice(0, 10), '2027-01-28');
+});
+
 test('phân quyền: bỏ quyền Thêm → không lập được nhật ký; mặc định vai trò → lập được', async () => {
   const members = (await api('GET', `/project-members/project/${P['001']}`)).body;
   const m = members.find(x => x.username === 'thanhb');
@@ -105,11 +150,17 @@ test('phân quyền: Sửa bao gồm Thêm', async () => {
   await api('PUT', `/project-members/${m.id}`, { access_permissions: null });
 });
 
-test('nhật ký: nhiều ca/ngày, trùng ca bị từ chối 409', async () => {
+test('nhật ký: mỗi giám sát viên lập riêng trong cùng ca; cùng tài khoản không tạo trùng', async () => {
   const d = '2026-10-02';
-  assert.equal((await api('POST', '/daily-logs', { project_id: P['001'], log_date: d, shift: 'CA1', work_summary: '1' }, 'thanhb')).status, 201);
+  const first = await api('POST', '/daily-logs', { project_id: P['001'], log_date: d, shift: 'CA1', contractor_unit: 'Nhà thầu A', work_item: 'Móng M1', technical_staff_count: 2, workforce_details: [{ type: 'Thợ sắt', count: 5 }, { type: 'Thợ bê tông', count: 7 }], machine_details: [{ type: 'Máy đào', count: 1 }, { type: 'Máy đầm', count: 2 }], worker_count: 99, machine_count: 99, work_summary: '1', recommendation: 'Bổ sung che chắn' }, 'thanhb');
+  assert.equal(first.status, 201);
+  assert.equal(first.body.work_item, 'Móng M1');
+  assert.equal(first.body.technical_staff_count, 2);
+  assert.equal(first.body.worker_count, 12);assert.equal(first.body.machine_count, 3);
+  assert.equal(first.body.workforce_details[0].type, 'Thợ sắt');
   assert.equal((await api('POST', '/daily-logs', { project_id: P['001'], log_date: d, shift: 'CA2', work_summary: '2' }, 'thanhb')).status, 201);
   assert.equal((await api('POST', '/daily-logs', { project_id: P['001'], log_date: d, shift: 'CA1', work_summary: '3' }, 'thanhb')).status, 409);
+  assert.equal((await api('POST', '/daily-logs', { project_id: P['001'], log_date: d, shift: 'CA1', work_summary: 'Nhật ký riêng của TVGS trưởng' }, 'hung')).status, 201);
 });
 
 test('phân công vào công trình chưa có trên máy chủ → 404 rõ ràng (không lỗi 500)', async () => {
@@ -173,6 +224,20 @@ test('hồ sơ: người không được phân công không xem được; tệp 
   assert.equal(b.status, 413);
 });
 
+test('công trình: hợp đồng lưu ở kho tệp tập trung, tải lại đúng và không tạo bản trùng', async () => {
+  const bytes = Buffer.from('%PDF-1.4 hop dong tvgs');
+  const path = `/projects/${P['001']}/files?category=TVGS_CONTRACT&name=${encodeURIComponent('hợp đồng TVGS.pdf')}`;
+  const first = await api('POST', path, bytes, 'admin', { 'Content-Type': 'application/pdf' });
+  assert.equal(first.status, 201);
+  const projects = (await api('GET', '/projects')).body;
+  const project = projects.find(p => p.id === P['001']);
+  assert.ok(project.files.some(f => f.id === first.body.id && f.category === 'TVGS_CONTRACT'));
+  const download = await api('GET', `/projects/${P['001']}/files/${first.body.id}`, null, 'thanhb');
+  assert.equal(Buffer.compare(download.body, bytes), 0);
+  assert.equal((await api('POST', path, bytes, 'admin', { 'Content-Type': 'application/pdf' })).status, 200);
+  assert.equal((await api('GET', `/projects/${P['001']}/files/${first.body.id}`, null, 'tuan')).status, 403);
+});
+
 test('tài khoản: tạo tài khoản mới đăng nhập được; Giám đốc không tạo được Admin; đổi mật khẩu', async () => {
   const c = await api('POST', '/users', { username: 'test.ql', full_name: 'Quản lý thử', password: 'matkhau123', role_name: 'MANAGER' });
   assert.equal(c.status, 201);
@@ -228,6 +293,17 @@ test('nhật ký: tài liệu kèm theo lên máy chủ, tải về đúng', asy
   assert.equal(f.status, 201);
   const dl = await api('GET', `/daily-logs/${id}/files/${f.body.id}`, null, 'hung');
   assert.equal(Buffer.compare(dl.body, bytes), 0);
+});
+
+test('nhật ký: ảnh nhị phân tối ưu được lưu tập trung và đọc lại', async () => {
+  const id = (await api('POST', '/daily-logs', { project_id: P['001'], log_date: '2026-11-01', shift: 'CA1', work_summary: 'Ảnh hiện trường' }, 'thanhb')).body.id;
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  const file = await api('POST', `/daily-logs/${id}/attachments-binary?name=${encodeURIComponent('hiện trường.png')}`, png, 'thanhb', { 'Content-Type': 'image/png' });
+  assert.equal(file.status, 201);
+  const list = (await api('GET', `/daily-logs/${id}/attachments`, null, 'hung')).body;
+  assert.ok(list.some(x => x.id === file.body.id));
+  const content = (await api('GET', `/daily-logs/${id}/attachments/${file.body.id}`, null, 'hung')).body;
+  assert.ok(content.data_url.startsWith('data:image/png;base64,'));
 });
 
 test('nhân sự: nhân viên chỉ thấy quyền truy cập của chính mình', async () => {
@@ -421,6 +497,12 @@ test('quyền duyệt theo công trình: cùng một người là TVGS trưởng
   const perms = (await api('GET', '/project-members/my-permissions', null, 'thanhb')).body;
   assert.ok(perms[P['002']].permissions.includes('APPROVE'), 'TVGS trưởng tại công trình 002 → có quyền Duyệt');
   assert.ok(!perms[P['001']].permissions.includes('APPROVE'), 'GS viên tại công trình 001 → không có quyền Duyệt');
+  const project1 = (await api('GET', `/projects/${P['001']}`, null, 'thanhb')).body;
+  const project2 = (await api('GET', `/projects/${P['002']}`, null, 'thanhb')).body;
+  assert.equal((await api('PATCH', `/projects/${P['001']}`, { name: project1.name, contract_no: project1.contract_no }, 'thanhb')).status, 403,
+    'GS viên không được sửa thông tin gốc của công trình');
+  assert.equal((await api('PATCH', `/projects/${P['002']}`, { name: project2.name, contract_no: project2.contract_no }, 'thanhb')).status, 200,
+    'TVGS trưởng tại công trình được sửa thông tin công trình đó');
   // Nhật ký chờ duyệt ở cả 2 công trình
   const l2 = (await api('POST', '/daily-logs', { project_id: P['002'], log_date: '2026-10-21', shift: 'CA1', work_summary: 'Thi công móng' })).body.id;
   await api('POST', `/daily-logs/${l2}/submit`);
@@ -650,4 +732,144 @@ test('đăng nhập sai: thông báo bằng tiếng Việt, hai trường hợp 
   assert.equal(khongCoNguoi.status, 401);
   assert.match(String(saiMatKhau.body.error), /Tên đăng nhập hoặc mật khẩu/, 'thông báo phải bằng tiếng Việt: ' + saiMatKhau.body.error);
   assert.equal(khongCoNguoi.body.error, saiMatKhau.body.error, 'sai mật khẩu và không có tài khoản phải cùng thông báo');
+});
+
+test('ma trận API đủ 5 vai trò: phạm vi công trình, tạo, sửa, duyệt, xóa và quản trị', async () => {
+  const actors = [
+    { who: 'admin', label: 'Admin', manage: true, create: true, approve: true, remove: true },
+    { who: 'duong', label: 'Giám đốc', manage: true, create: true, approve: true, remove: true },
+    { who: 'ql', label: 'Quản lý', manage: false, create: false, approve: false, remove: false },
+    { who: 'hung', label: 'TVGS trưởng', manage: false, create: true, approve: true, remove: false },
+    { who: 'thanhb', label: 'TVGS', manage: false, create: true, approve: false, remove: false }
+  ];
+  const baseProject = (await api('GET', `/projects/${P['001']}`)).body;
+
+  for (const [index, actor] of actors.entries()) {
+    const prefix = actor.label + ': ';
+    assert.equal((await api('GET', '/projects', null, actor.who)).status, 200, prefix + 'đọc danh sách công trình');
+    assert.equal((await api('GET', '/users', null, actor.who)).status, actor.manage ? 200 : 403, prefix + 'quản lý tài khoản');
+
+    const contractNo = 'MATRIX-' + String(index + 1).padStart(2, '0');
+    const createProject = await api('POST', '/projects', { contract_no: contractNo, name: 'Công trình ma trận ' + actor.label }, actor.who);
+    assert.equal(createProject.status, actor.manage ? 201 : 403, prefix + 'tạo công trình');
+
+    const updateProject = await api('PATCH', `/projects/${P['001']}`, { contract_no: baseProject.contract_no, name: baseProject.name }, actor.who);
+    assert.equal(updateProject.status, actor.approve ? 200 : 403, prefix + 'sửa thông tin công trình theo vai trò tại công trình');
+
+    const addMember = await api('POST', '/project-members', { project_id: P['001'] }, actor.who);
+    assert.equal(addMember.status, actor.manage ? 400 : 403, prefix + 'phân công nhân sự');
+
+    const date = `2026-12-${String(10 + index).padStart(2, '0')}`;
+    const log = await api('POST', '/daily-logs', { project_id: P['001'], log_date: date, shift: 'CA3', work_summary: 'Ma trận ' + actor.label }, actor.who);
+    assert.equal(log.status, actor.create ? 201 : 403, prefix + 'lập nhật ký');
+
+    const issue = await api('POST', '/issues', { project_id: P['001'], title: 'Ma trận chất lượng ' + actor.label, severity: 'LOW' }, actor.who);
+    assert.equal(issue.status, actor.create ? 201 : 403, prefix + 'lập nội dung chất lượng');
+
+    const doc = await api('POST', '/documents', { project_id: P['001'], doc_group: 'LEGAL', type: 'BB', name: 'Ma trận hồ sơ ' + actor.label }, actor.who);
+    assert.equal(doc.status, actor.create ? 201 : 403, prefix + 'lập hồ sơ');
+
+    const approvalLog = (await api('POST', '/daily-logs', {
+      project_id: P['001'], log_date: `2026-12-${String(20 + index).padStart(2, '0')}`, shift: 'CA2', work_summary: 'Chờ ' + actor.label
+    })).body;
+    await api('POST', `/daily-logs/${approvalLog.id}/submit`);
+    const approval = await api('POST', `/daily-logs/${approvalLog.id}/approve`, { comment: 'Kiểm tra ma trận' }, actor.who);
+    assert.equal(approval.status, actor.approve ? 200 : 403, prefix + 'duyệt nhật ký');
+
+    const deleteTarget = (await api('POST', '/issues', { project_id: P['001'], title: 'Xóa ma trận ' + actor.label, severity: 'LOW' })).body;
+    const deletion = await api('DELETE', `/issues/${deleteTarget.id}`, { reason: 'Kiểm tra quyền xóa' }, actor.who);
+    assert.equal(deletion.status, actor.remove ? 200 : 403, prefix + 'xóa nội dung');
+  }
+});
+
+test('van ban chat luong: luu tap trung day du chi tiet bieu mau trong issues.details', async () => {
+  const details = {
+    documentType: 'MINUTES',
+    sourceType: 'Bien ban hien truong',
+    reference: 'BBHT-001',
+    projectName: 'Cong trinh A',
+    packageName: 'Goi thau 1',
+    documentDate: '2026-10-12',
+    startTime: '2026-10-12T08:00',
+    endTime: '2026-10-12T09:30',
+    conclusion: 'Dat yeu cau, tiep tuc theo doi',
+    participants: [{ group: 'TVGS', name: 'Nguyen Thanh B', role: 'GS vien' }],
+    signatures: { tvgs: 'Nguyen Thanh B' }
+  };
+  const created = await api('POST', '/issues', {
+    project_id: P['001'], issue_code: 'BBHT-001', title: 'Kiem tra cot tang 1',
+    description: 'Kiem tra kich thuoc va cot thep', severity: 'LOW', due_date: '2026-10-15',
+    source_type: 'Bien ban hien truong', details
+  }, 'thanhb');
+  assert.equal(created.status, 201);
+  const fetched = (await api('GET', `/issues?project_id=${P['001']}`)).body.find(x => x.id === created.body.id);
+  assert.equal(fetched.details.reference, 'BBHT-001');
+  assert.equal(fetched.details.participants[0].name, 'Nguyen Thanh B');
+  assert.equal(fetched.details.signatures.tvgs, 'Nguyen Thanh B');
+  const updated = await api('PATCH', `/issues/${created.body.id}`, {
+    details: { ...fetched.details, conclusion: 'Can bo sung anh hien truong' }
+  }, 'thanhb');
+  assert.equal(updated.status, 200);
+  assert.equal((await api('GET', `/issues/${created.body.id}`)).body.details.conclusion, 'Can bo sung anh hien truong');
+});
+
+test('dong bo nhieu thiet bi: tu choi ban sua cu cho cong trinh, bao cao ngay, ho so va chat luong', async () => {
+  const project = (await api('GET', `/projects/${P['001']}`)).body;
+  assert.ok(project.row_version >= 1);
+  const projectFirst = await api('PATCH', `/projects/${project.id}`, {
+    contract_no: project.contract_no,
+    name: project.name,
+    expected_row_version: project.row_version
+  });
+  assert.equal(projectFirst.status, 200);
+  assert.equal(projectFirst.body.row_version, project.row_version + 1);
+  const projectStale = await api('PATCH', `/projects/${project.id}`, {
+    contract_no: project.contract_no,
+    name: project.name,
+    expected_row_version: project.row_version
+  });
+  assert.equal(projectStale.status, 409);
+  assert.equal(projectStale.body.code, 'EDIT_CONFLICT');
+
+  const log = (await api('POST', '/daily-logs', {
+    project_id: P['001'], log_date: '2027-01-02', shift: 'CA1', work_summary: 'Bao cao thiet bi A'
+  }, 'thanhb')).body;
+  assert.ok(log.row_version >= 1);
+  const logFirst = await api('PATCH', `/daily-logs/${log.id}`, {
+    work_summary: 'Bao cao da cap nhat', expected_row_version: log.row_version
+  }, 'thanhb');
+  assert.equal(logFirst.status, 200);
+  const logStale = await api('PATCH', `/daily-logs/${log.id}`, {
+    work_summary: 'Ban cu tren thiet bi B', expected_row_version: log.row_version
+  }, 'thanhb');
+  assert.equal(logStale.status, 409);
+  assert.equal(logStale.body.code, 'EDIT_CONFLICT');
+
+  const doc = (await api('POST', '/documents', {
+    project_id: P['001'], doc_group: 'REPORT', type: 'BC', name: 'Bao cao kiem tra xung dot'
+  }, 'thanhb')).body;
+  assert.ok(doc.row_version >= 1);
+  const docFirst = await api('PATCH', `/documents/${doc.id}`, {
+    name: 'Bao cao da cap nhat', expected_row_version: doc.row_version
+  }, 'thanhb');
+  assert.equal(docFirst.status, 200);
+  const docStale = await api('PATCH', `/documents/${doc.id}`, {
+    name: 'Bao cao cu', expected_row_version: doc.row_version
+  }, 'thanhb');
+  assert.equal(docStale.status, 409);
+  assert.equal(docStale.body.code, 'EDIT_CONFLICT');
+
+  const issue = (await api('POST', '/issues', {
+    project_id: P['001'], title: 'Bien ban kiem tra xung dot', severity: 'LOW'
+  }, 'thanhb')).body;
+  assert.ok(issue.row_version >= 1);
+  const issueFirst = await api('PATCH', `/issues/${issue.id}`, {
+    description: 'Noi dung thiet bi A', expected_row_version: issue.row_version
+  }, 'thanhb');
+  assert.equal(issueFirst.status, 200);
+  const issueStale = await api('PATCH', `/issues/${issue.id}`, {
+    description: 'Noi dung cu thiet bi B', expected_row_version: issue.row_version
+  }, 'thanhb');
+  assert.equal(issueStale.status, 409);
+  assert.equal(issueStale.body.code, 'EDIT_CONFLICT');
 });

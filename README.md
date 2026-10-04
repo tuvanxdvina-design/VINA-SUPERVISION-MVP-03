@@ -1,26 +1,31 @@
-# VINA-SUPERVISION MVP-02 — chạy thử nội bộ
+# VINA-SUPERVISION MVP-03 — chạy thử có kiểm soát
 
-Ứng dụng chạy trên máy này: giao diện `http://localhost:8080/`, API `http://localhost:3001/`, PostgreSQL trong Docker. Các cổng chỉ lắng nghe trên `127.0.0.1`.
+Ứng dụng MVP-03 chạy trên máy này: giao diện `http://localhost:8081/`, API `http://localhost:3002/`, PostgreSQL trong Docker qua cổng máy `5433`. Các cổng chỉ lắng nghe trên `127.0.0.1` và được tách khỏi các phiên bản dự án khác.
 
 ## Khởi động
 
 Yêu cầu Docker Desktop, Node.js, Python và thư mục `backend/node_modules` đã được cài. Chạy `run.bat` trong thư mục dự án. Tập lệnh khởi động cơ sở dữ liệu, API và giao diện, sau đó kiểm tra kết nối. Có thể chạy lại mà không tạo thêm máy chủ.
 
-Kiểm tra `http://localhost:3001/health`: kết quả cần có `status: OK` và `database: connected`. Nếu khởi động lỗi, xem `runtime-logs/backend.err.log` và `runtime-logs/frontend.err.log`.
+Kiểm tra `http://localhost:3002/health`: kết quả cần có `status: OK` và `database: connected`. Nếu khởi động lỗi, xem `runtime-logs/backend.err.log` và `runtime-logs/frontend.err.log`.
 
 ## Phạm vi bản chạy thử
 
-- Đăng nhập bằng tài khoản demo có sẵn và mật khẩu `demo`. API từ chối mật khẩu khác, tài khoản không có sẵn và tài khoản bị vô hiệu hóa. Chế độ demo không được dùng khi `NODE_ENV=production`.
-- Công trình và nhật ký được đọc từ PostgreSQL. Tạo/cập nhật công trình và tạo/cập nhật nhật ký sẽ đồng bộ từ hàng đợi trình duyệt khi có kết nối và đã đăng nhập. Gửi lại yêu cầu tạo cùng ID không sinh bản ghi trùng.
-- Nhật ký mới bắt đầu ở trạng thái `DRAFT`. Các thao tác duyệt/khóa phụ thuộc vai trò trong API.
-- Vấn đề, hồ sơ và nhân sự trong giao diện vẫn lưu cục bộ ở trình duyệt; chưa có đồng bộ PostgreSQL cho các phần này. Hãy dùng **Xuất JSON** để giữ bản sao trước khi xóa dữ liệu trình duyệt hoặc đổi máy.
+- Hệ thống đang chạy ở chế độ `production`; tài khoản demo đã bị vô hiệu hóa. Mỗi người sử dụng tài khoản riêng và chỉ thấy các công trình được phân công.
+- Công trình, tiến độ, nhật ký, hồ sơ, tệp đính kèm, nội dung chất lượng, nhân sự, phân quyền, quy trình duyệt và thùng rác được lưu tập trung trong PostgreSQL/thư mục tải lên của máy chủ.
+- Trình duyệt chỉ giữ phiên đăng nhập, bộ nhớ đệm giao diện và hàng đợi tạm khi mất kết nối; đây không phải nguồn dữ liệu chính.
+- Tệp chờ khi thiết bị mất mạng được giữ bằng IndexedDB, không nhúng base64 vào `localStorage`. Ảnh lớn được tối ưu tối đa khoảng 2560 px trước khi xếp hàng; tệp chỉ bị xóa khỏi hàng đợi sau khi máy chủ xác nhận lưu thành công.
+- Hợp đồng công trình và ảnh nhật ký lưu trong kho `backend/uploads` theo SHA-256; PostgreSQL lưu metadata và quyền truy cập. Hồ sơ/báo cáo hiện gửi nhị phân trực tiếp tới máy chủ. Không được gửi duyệt nhật ký khi còn tệp chờ đồng bộ.
+- Nhật ký và hồ sơ đi theo quy trình nháp → gửi duyệt → phê duyệt/trả lại → khóa. Quyền xem, thêm, sửa, tải xuống, duyệt và xóa được kiểm tra tại máy chủ theo từng công trình.
+- Ứng dụng có thể cài theo chuẩn PWA trên Windows, Android và iPhone nhưng vẫn kết nối cùng một máy chủ dữ liệu.
 
 ## Giới hạn
 
-Đây là bản chạy thử nội bộ với mật khẩu demo và dữ liệu minh họa. Chưa dùng dữ liệu thật hoặc mở dịch vụ ra mạng công cộng. Quyền truy cập theo từng công trình, xử lý xung đột khi nhiều người sửa cùng lúc, lưu tệp lên máy chủ và quy trình khôi phục sau sự cố cần được hoàn thiện trước khi triển khai thực tế.
+Đây là bản chạy thử nội bộ qua mạng Tailscale riêng, không mở ra Internet công cộng. Máy chủ văn phòng, Docker Desktop và Tailscale phải hoạt động để thiết bị khác đọc hoặc cập nhật dữ liệu. Cần tiếp tục nghiệm thu thực địa về chất lượng mạng, dung lượng ảnh/tệp, xung đột khi nhiều người cùng sửa và quy trình khôi phục sau sự cố trước khi vận hành chính thức.
 
 Các chuỗi cũ đã mất dấu thành dấu `?` trong nội dung nhật ký PostgreSQL cần đối chiếu bản gốc trước khi sửa; việc đổi mã hóa tệp không thể khôi phục những ký tự đã mất trong dữ liệu.
 
 ## Chạy trên nhiều thiết bị
 
-Xem `DEPLOY-MULTISITE.md`. Phương án chạy thử là một máy chủ trung tâm và truy cập riêng qua Tailscale Serve. Trước khi bật truy cập từ xa, bắt buộc đặt mật khẩu riêng, chuyển sang production và phân công từng tài khoản vào đúng công trình.
+Xem `DEPLOY-MULTISITE.md`. Địa chỉ chạy thử hiện tại là `https://desktop-e9suj00.tailc548b7.ts.net/`; chỉ thiết bị đã vào đúng mạng Tailscale mới truy cập được.
+
+Mọi thay đổi phải tuân theo `docs/QUY-TRINH-TRIEN-KHAI.md`; kiểm thử vai trò và nghiệm thu theo `docs/TEST-MATRIX-ROLES.md`.

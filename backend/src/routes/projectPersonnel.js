@@ -4,6 +4,7 @@ const rbac = require('../middleware/rbac');
 const access = require('../middleware/projectAccess');
 const service = require('../services/projectPersonnelService');
 const permissionService = require('../services/permissionService');
+const { sendStoredFile } = require('../utils/fileSafety');
 
 const router = express.Router();
 router.use(auth.verifyToken);
@@ -96,6 +97,37 @@ router.post('/:id/unlink-account', rbac.checkRole(managers), loadPersonnel, asyn
     const row = await service.unlinkAccount(req.params.id);
     await req.audit('project_personnel', req.params.id, 'UNLINK_ACCOUNT', req.personnel, row, req.user.userId);
     res.json(row);
+  } catch (error) { sendError(res, error); }
+});
+
+const MAX_CERT_FILE = 15 * 1024 * 1024;
+router.get('/:id/files', loadPersonnel, async (req, res) => {
+  try {
+    if (!await access.allowed(req.user, req.personnel.project_id)) return res.status(403).json({ error: 'Không có quyền truy cập công trình' });
+    res.json(await service.listFiles(req.params.id));
+  } catch (error) { sendError(res, error); }
+});
+
+router.post('/:id/files', rbac.checkRole(managers), loadPersonnel, express.raw({ type: () => true, limit: MAX_CERT_FILE + 1024 }), async (req, res) => {
+  try {
+    if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'Tệp rỗng' });
+    if (req.body.length > MAX_CERT_FILE) return res.status(413).json({ error: 'Mỗi tệp chứng chỉ tối đa 15 MB' });
+    const name = String(req.query.name || 'chung-chi').slice(0, 255);
+    const file = await service.addFile(req.personnel, 'CERTIFICATE', name, String(req.headers['content-type'] || 'application/octet-stream').slice(0, 120), req.body, req.user.userId);
+    if (file.created) await req.audit('project_personnel_files', file.id, 'CREATE', null, { personnel_id: req.params.id, name, size: req.body.length }, req.user.userId);
+    res.status(file.created ? 201 : 200).json(file);
+  } catch (error) {
+    if (error.type === 'entity.too.large') return res.status(413).json({ error: 'Mỗi tệp chứng chỉ tối đa 15 MB' });
+    sendError(res, error);
+  }
+});
+
+router.get('/:id/files/:fileId', loadPersonnel, async (req, res) => {
+  try {
+    if (!await access.allowed(req.user, req.personnel.project_id)) return res.status(403).json({ error: 'Không có quyền truy cập công trình' });
+    const file = await service.getFile(req.params.id, req.params.fileId);
+    if (!file) return res.status(404).json({ error: 'Không tìm thấy tệp chứng chỉ' });
+    sendStoredFile(res, file, req.query.download);
   } catch (error) { sendError(res, error); }
 });
 

@@ -6,7 +6,9 @@ window.addEventListener('online',()=>{
 });
 
 window.addEventListener('load', async ()=>{
+  if(typeof migrateLegacyEmbeddedFiles==='function')await migrateLegacyEmbeddedFiles();
   if(window.syncPendingProjects) await window.syncPendingProjects();
+  if(typeof syncQueuedProjectFiles==='function')for(const project of serverProjects())await syncQueuedProjectFiles(project.id).catch(error=>console.warn('Chưa đồng bộ được tệp công trình:',error.message));
   await syncDailyLogsFromApi();
   await syncDocumentsFromApi();
   if(window.syncPendingDailyLogs) await window.syncPendingDailyLogs();

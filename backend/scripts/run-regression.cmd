@@ -15,12 +15,14 @@ if errorlevel 1 (
   endlocal
   exit /b 2
 )
-set TEST_DB_URL=postgres://postgres:postgres@127.0.0.1:5432/%DB%
+set TEST_DB_URL=postgres://postgres:postgres@127.0.0.1:5433/%DB%
+for /f "delims=" %%I in ('docker compose -f "%~dp0..\..\docker-compose.yml" ps -q postgres') do set DB_CONTAINER=%%I
+if "%DB_CONTAINER%"=="" exit /b 3
 cd /d %~dp0..
 set OUT=%~dp0..\tests\last-regression.txt
 echo RUNNING %DATE% %TIME% db=%DB%> "%OUT%"
 node --test tests/regression.test.js >> "%OUT%" 2>&1
 echo EXIT %ERRORLEVEL%>> "%OUT%"
-if /I not "%2"=="keep" docker exec vina-supervision-db psql -U postgres -d postgres -qc "drop database if exists %DB%" >nul 2>&1
+if /I not "%2"=="keep" docker exec %DB_CONTAINER% psql -U postgres -d postgres -qc "drop database if exists %DB%" >nul 2>&1
 echo DONE>> "%OUT%"
 endlocal

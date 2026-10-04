@@ -15,7 +15,16 @@
     if(!screen) return;
 
     const auth=getAuth();
-    screen.style.display=auth?.token ? 'none' : 'flex';
+    const locked=!auth?.token;
+    screen.style.display=locked ? 'flex' : 'none';
+
+    [document.querySelector('header'), document.querySelector('.layout')]
+      .filter(Boolean)
+      .forEach(root=>{
+        root.hidden=locked;
+        root.toggleAttribute('inert', locked);
+        root.setAttribute('aria-hidden', locked ? 'true' : 'false');
+      });
   }
 
   window.vinaDoLogin = async function(){

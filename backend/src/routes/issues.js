@@ -17,6 +17,12 @@ async function memberPermission(userId, projectId) {
 async function canCreateIssue(userId, projectId){const a=await memberPermission(userId,projectId);return a.permissions.includes('CREATE')||a.permissions.includes('EDIT')}
 async function canEditIssue(userId, issue){const a=await memberPermission(userId,issue.project_id);if(['ADMIN','DIRECTOR'].includes(a.role))return true;if(['RESOLVED','CLOSED','SIGNED','ISSUED'].includes(String(issue.status||'').toUpperCase()))return a.permissions.includes('EDIT');return (issue.created_by===userId&&a.permissions.includes('CREATE'))||a.permissions.includes('EDIT')}
 
+function detailsError(details) {
+  if (details === undefined) return '';
+  if (details === null || typeof details !== 'object' || Array.isArray(details)) return 'Thông tin chi tiết không hợp lệ';
+  if (JSON.stringify(details).length > 3000000) return 'Thông tin chi tiết quá lớn';
+  return '';
+}
 
 router.use(authMiddleware.verifyToken);
 router.use('/:id', access.record('issues'));
@@ -52,6 +58,8 @@ router.post('/', access.body, async (req, res) => {
     if (typeof req.body.title !== 'string' || !req.body.title.trim()) {
       return res.status(400).json({ error: 'Cần nhập nội dung vấn đề' });
     }
+    const detailError = detailsError(req.body.details);
+    if (detailError) return res.status(400).json({ error: detailError });
     const { issue, created } = await issueService.createIssue({
       ...req.body,
       created_by: req.user.userId
@@ -73,7 +81,11 @@ router.patch('/:id', async (req, res) => {
     const current = await issueService.getIssueById(req.params.id);
     if (!current) return res.status(404).json({ error: 'Không tìm thấy vấn đề' });
     if (!(await canEditIssue(req.user.userId, current))) return res.status(403).json({ error: 'Chỉ người lập khi văn bản chưa đóng hoặc người được cấp quyền Sửa mới được cập nhật' });
+    const detailError = detailsError(req.body.details);
+    if (detailError) return res.status(400).json({ error: detailError });
     const issue = await issueService.updateIssue(req.params.id, req.body);
+    if (!issue && req.body.expected_row_version != null) return res.status(409).json({ code: 'EDIT_CONFLICT', error: 'Văn bản chất lượng đã được cập nhật ở thiết bị khác. Bản trên thiết bị này được giữ để đối chiếu.' });
+    if (!issue) return res.status(404).json({ error: 'Không tìm thấy vấn đề' });
     await req.audit('issues', req.params.id, 'UPDATE', null, issue, req.user.userId);
     res.json(issue);
   } catch (err) {

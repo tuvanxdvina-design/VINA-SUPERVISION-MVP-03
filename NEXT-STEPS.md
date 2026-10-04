@@ -1,7 +1,7 @@
 # VINA-SUPERVISION — NEXT STEPS
 
 ## 1. Chạy MVP cục bộ
-- Windows: chạy `run.bat`, mở `http://localhost:8080`.
+- Windows: chạy `run.bat`, mở `http://localhost:8081`.
 - macOS/Linux: chạy `./run.sh`, mở `http://localhost:8080`.
 - Có thể mở trực tiếp `index.html`, nhưng HTTP local phù hợp hơn để kiểm thử.
 
