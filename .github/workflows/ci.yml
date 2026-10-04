@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  checks:
+    name: Syntax, Regression, UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:14-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Audit dependencies
+        working-directory: backend
+        run: npm audit
+
+      - name: Syntax checks
+        working-directory: backend
+        run: npm run test:syntax
+
+      - name: Security config tests
+        working-directory: backend
+        run: npm run test:security
+
+      - name: Frontend structure checks
+        run: node backend/scripts/check-frontend.js
+
+      - name: Backend regression tests
+        working-directory: backend
+        env:
+          TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5432/vina_reg_ci
+          JWT_SECRET: ci_random_secret_for_tests_at_least_32_chars
+          CORS_ORIGIN: http://127.0.0.1:3103,http://localhost:3103
+        run: node --test --test-reporter=spec tests/regression.test.js
+
+      - name: Install Playwright Chromium
+        working-directory: backend
+        run: npx playwright install --with-deps chromium
+
+      - name: UI tests
+        working-directory: backend
+        env:
+          UI_TEST_DB_URL: postgres://postgres:postgres@127.0.0.1:5432/vina_ui_ci
+          UI_BROWSER_CHANNEL: bundled
+          JWT_SECRET: ci_random_secret_for_tests_at_least_32_chars
+          CORS_ORIGIN: http://127.0.0.1:3103,http://localhost:3103
+        run: node --test --test-reporter=spec tests/ui/all.test.js
+
+      - name: Upload UI failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-artifacts
+          path: backend/tests/ui-artifacts
+          if-no-files-found: ignore

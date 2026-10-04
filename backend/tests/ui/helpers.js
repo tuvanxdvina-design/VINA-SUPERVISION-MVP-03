@@ -33,9 +33,12 @@ async function startApp() {
   server = db.startServer({ port: PORT });
   await db.waitHealth(BASE);
   try {
-    browser = await chromium.launch({ channel: 'chrome', headless: true });
+    const channel = process.env.UI_BROWSER_CHANNEL || 'chrome';
+    const launchOptions = { headless: true };
+    if (channel && channel !== 'bundled') launchOptions.channel = channel;
+    browser = await chromium.launch(launchOptions);
   } catch (e) {
-    throw new Error('Không mở được Chrome (channel=chrome). Máy này cần Google Chrome; nếu không có, chạy "npx playwright install chromium" rồi bỏ tham số channel. Lỗi gốc: ' + e.message);
+    throw new Error('Không mở được trình duyệt Playwright. Máy local mặc định dùng Chrome (UI_BROWSER_CHANNEL=chrome); CI dùng Chromium bundled (UI_BROWSER_CHANNEL=bundled). Lỗi gốc: ' + e.message);
   }
 }
 

@@ -25,9 +25,10 @@ for (const f of jsFiles) {
   try { new vm.Script(fs.readFileSync(path.join(jsDir, f), 'utf8'), { filename: 'js/' + f }); }
   catch (e) { bad++; console.log(`LỖI js/${f}: ${e.message}`); }
 }
-const srcTags = [...html.matchAll(/<script\b[^>]*src="\.\/js\/([^"]+)"/g)].map(m => m[1]);
+const cleanAsset = v => String(v || '').split(/[?#]/)[0];
+const srcTags = [...html.matchAll(/<script\b[^>]*src="\.\/js\/([^"]+)"/g)].map(m => cleanAsset(m[1]));
 const swSrc = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-const shell = [...swSrc.matchAll(/'\.\/js\/([^']+)'/g)].map(m => m[1]);
+const shell = [...swSrc.matchAll(/'\.\/js\/([^']+)'/g)].map(m => cleanAsset(m[1]));
 for (const f of jsFiles) {
   if (!srcTags.includes(f)) { bad++; console.log(`LỖI js/${f} không có thẻ <script src> trong index.html — tính năng sẽ mất im lặng`); }
   if (!shell.includes(f)) { bad++; console.log(`LỖI js/${f} không có trong SHELL_FILES của sw.js — app sẽ hỏng khi mất mạng`); }
