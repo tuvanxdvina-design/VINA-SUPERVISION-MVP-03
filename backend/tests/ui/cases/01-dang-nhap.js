@@ -31,6 +31,12 @@ module.exports = function () {
 
     await page.fill('#loginPassword', 'demo');
     await page.click('#loginButton');
+    await page.waitForFunction(() => {
+      const auth = localStorage.getItem('vina_supervision_auth');
+      const login = document.getElementById('loginScreen');
+      const header = document.querySelector('header');
+      return !!auth && login && getComputedStyle(login).display === 'none' && header && !header.hidden;
+    });
     await page.waitForSelector('nav button[data-page="projects"]', { state: 'visible' });
     assert.equal(await page.locator('#buildBanner').count(), 0, 'không được có banner lệch phiên bản giữa index.html và máy chủ');
     assert.equal(await page.locator('#loginScreen').isVisible(), false, 'đăng nhập đúng thì màn hình đăng nhập phải biến mất');

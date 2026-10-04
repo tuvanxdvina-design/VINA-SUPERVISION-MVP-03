@@ -3,6 +3,10 @@ const { BASE, uiTest, loginViaApi, openPage } = require('../helpers');
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 
+function unexpectedConsoleErrors(page) {
+  return page.__console.filter(message => !message.includes('ERR_INTERNET_DISCONNECTED'));
+}
+
 async function openFilledReport(page, date, shift, work) {
   await openPage(page, 'daily');
   await page.click('#newLogButton');
@@ -51,7 +55,7 @@ module.exports = function register() {
     const files = await page.request.get(BASE + '/api/daily-logs/' + saved.serverId + '/attachments', { headers: { Authorization: 'Bearer ' + auth.token } });
     assert.equal(files.status(), 200);
     assert.equal((await files.json()).length, 2, 'nối lại phải tải đủ đúng hai ảnh');
-    assert.deepEqual(page.__console, []);
+    assert.deepEqual(unexpectedConsoleErrors(page), []);
   });
 
   uiTest('GD-24 bấm lưu liên tiếp: chỉ tạo một báo cáo và giao diện không treo', async page => {
